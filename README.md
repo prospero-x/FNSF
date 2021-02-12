@@ -10,23 +10,37 @@ densities of deuterium and neon, and heat flux on the divertor surface.
 We will use his data as input to hPIC in order to get a theta-E distribution
 of particles
 
+### Requirements
+- Python 3.8
+
+
+### Setup
+
+SHOULD run the following inside a virtualenv or pew environment
+```bash
+pip install -r requirements.txt
+```
+
 ### Commands
 
-To clean the data (convert it from Jeremy Lori's sent raw data to usable CSV):
+Assuming raw data is from Jeremy already exists, format the data first (convert it from Jeremy Lori's sent raw data to usable CSV):
 ```bash
-./clean_data <PATH_TO_RAW_DATAFILE>
+scripts/format_data_files.sh solps_data/raw/solpsTargInner.txt
 ```
+A new directory `solps_data/formatted` will be created, as well as a formatted pure CSV at the location `solps_data/formatted/solpsTargInner.csv`
 
 To configure simulations for a specific data set (inner SP or outer SP):
 ```bash
-python configure_simulations solps_data/cleaned/solpsTargInner.csv
+scripts/configure_simulations.py solps_data/cleaned/solpsTargInner.csv
 ```
 
-This creates an executable `solpsTargInner.sh` as well as a directory tree
+This creates an executable `scripts/run-hpic-olpsTargInner.sh` as well as a directory tree
 in `hpic_results`. One subdirectory is created for every row in the SOLPS
 data file, i.e. one subdir for every position relative to the SP.
 
 To run the simulations for a specific data set (inner SP or outer SP), run:
 ```bash
-./solpsTargInner.sh
+scripts/run-hpic-solpsTargInner.sh
 ```
+
+

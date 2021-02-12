@@ -1,77 +1,13 @@
 import pandas as pd
-import sys
-import os
-import stat
-
-# Number of times info is printed to stdout
-_KINFO = 10
-
-# Number of times GRIDDATA is saved
-_KGRID = 50
-
-# Number of times PARTICLEDATA is saved
-_KPART = 50
-
-# Number of times fluid data is saved
-_KFLUID = 50
+from columns import _columns_of_interest, _ions_of_interest
 
 
+# 1 Dalton [kg]
+amu2kg = 1.6605e-27
 
-_columns_of_interest = [
-    'L-Lsep (m)',
-    #'R (m)',
-    #'Z (m)',
-    'Te (eV)',
-    'Ti (eV)',
-    #'FluxLi+3',
-    #'FluxLi+2',
-    #'FluxLi+1',
-    #'FluxNe+10',
-    #'FluxNe+9',
-    #'FluxNe+8',
-    #'FluxNe+7',
-    #'FluxNe+6',
-    #'FluxNe+5',
-    #'FluxNe+4',
-    #'FluxNe+3',
-    #'FluxNe+2',
-    #'FluxNe+1',
-    #'FluxD+1',
-    #'nLi+3',
-    #'nLi+2',
-    #'nLi+1',
-    'nNe+10',
-    'nNe+9',
-    'nNe+8',
-    'nNe+7',
-    'nNe+6',
-    'nNe+5',
-    'nNe+4',
-    'nNe+3',
-    'nNe+2',
-    'nNe+1',
-    'nD+1',
-    '|B| (T)',
-    'Bangle (deg)',
-    #'q_e (W/m2)',
-    #'q_i (W/m2)',
-    #'q_tot (W/m2)',
-]
 
-# Each ion with it charge number and (average) atomic mass
-_ions_of_interest = {
-    'nD+1':   {'Ai': 2.014,   'Zi': 1},
-    'nNe+1':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+2':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+3':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+4':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+5':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+6':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+7':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+8':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+9':  {'Ai': 20.1797, 'Zi': 10},
-    'nNe+10': {'Ai': 20.1797, 'Zi': 10},
-}
+# Boltzmann Constant [J/K]
+kB = 1.380649e-23
 
 
 def load_solps_data(filename):
@@ -105,6 +41,16 @@ def get_num_ion_transit_times(df_row):
 def get_num_particles_per_cell(df_row):
     p5 = 500
     return p5
+
+
+def larmor_radius(T, m, B):
+    """
+    Calculate the gyroradius of a species in the tokamak.
+
+    To compute v_parallel, use the mean velocity formula: sqrt(8/pi * kT/m)
+    """
+    v = np.sqrt(8./np.pi * kB * T / m)
+
 
 
 
@@ -145,6 +91,11 @@ def format_hPIC_command_line_args(df_row, output_dir):
         Ai = mass_info['Ai']
         Zi = mass_info['Zi']
         ni = df_row[ion]
+
+        # Figure out gyroradius to make sure we're not intersecting the
+        # divertor early
+        mi = Ai * amu2kg
+        r_L = larmor_radius(Ti, mi, B0)
 
         cla += f'{Ai} {Zi} {ni:.5e} '
   

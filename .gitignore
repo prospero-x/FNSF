@@ -1,3 +1,5 @@
+__pycache__
+
 # Generated bash scripts to run simulations
 solpsTargInner.sh
 solpsTargOuter.sh
