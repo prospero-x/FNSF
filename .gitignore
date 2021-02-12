@@ -1,0 +1,6 @@
+# Generated bash scripts to run simulations
+solpsTargInner.sh
+solpsTargOuter.sh
+
+# Output directory holding simulation results
+hpic_results/
