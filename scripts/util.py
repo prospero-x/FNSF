@@ -1,15 +1,16 @@
 import pandas as pd
 import os
 import stat
-from columns import _columns_of_interest
 
 
-def load_solps_data(filename):
+def load_solps_data(filename, columns_subset = None):
     df = pd.read_csv(
         filename,
         delimiter = ',',
     )
-    return df[_columns_of_interest]
+    if columns_subset is None:
+        return df
+    return df[columns_subset]
 
 
 def mkdir(dirname):

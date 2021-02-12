@@ -162,7 +162,7 @@ def main():
         + '# Assumes compiled 1d3v hpic binary is in PATH\n\n\n',
     )
 
-    df = util.load_solps_data(datafile)
+    df = util.load_solps_data(datafile, columns_subset = _columns_of_interest)
 
     # Make a directory to hold these results
     data_set_output_dir = results_dir + '/' + data_set_label
