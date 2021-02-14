@@ -21,3 +21,11 @@ def mkdir(dirname):
 def make_executable(filename):
     os.chmod(filename, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
+def get_data_set_label(datafile):
+    data_set_label = datafile.split('/')[-1].split('.')[0]
+    _labels = {
+        'solpsTargInner': 'Inner Strike Point',
+        'solpsTargOuter': 'Outer Strike Point',
+    }
+    return _labels[data_set_label]
+

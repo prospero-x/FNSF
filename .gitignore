@@ -1,8 +1,7 @@
 __pycache__
 
 # Generated bash scripts to run simulations
-solpsTargInner.sh
-solpsTargOuter.sh
+scripts/run-hpic*.sh
 
 # Output directory holding simulation results
 hpic_results/

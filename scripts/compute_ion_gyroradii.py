@@ -1,5 +1,17 @@
-import pandas as pd
+import sys
 from columns import _columns_of_interest, _ions_of_interest
+import util
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+"""
+This script is meant to be a sanity check on the SOLPS data. We want
+to calculate the gyroradius of the incoming ions to make sure they're
+not intersecting the diverter before the strike point.
+"""
+
+Qe = 1.602176e-19
 
 
 # 1 Dalton [kg]
@@ -10,139 +22,103 @@ amu2kg = 1.6605e-27
 kB = 1.380649e-23
 
 
-def load_solps_data(filename):
-    df = pd.read_csv(
-        filename,
-        delimiter = ',',
-    )
-    return df[_columns_of_interest]
-
-
-def get_domain_debye_lengths(df_row):
-    p1 = 50
-    return p1
-
-
-def get_grid_points_per_debye_length(df_row):
-    p2 = 1
-    return p2
-
-
-def get_time_steps_per_gyroperiod(df_row):
-    p3 = 20
-    return p3
-
-
-def get_num_ion_transit_times(df_row):
-    p4 = 1
-    return p4
-
-
-def get_num_particles_per_cell(df_row):
-    p5 = 500
-    return p5
-
-
-def larmor_radius(T, m, B):
+def gyroradius(T, m, q, B):
     """
     Calculate the gyroradius of a species in the tokamak.
 
     To compute v_parallel, use the mean velocity formula: sqrt(8/pi * kT/m)
+
+    :param: T: ion temperature, in eV
+    :param: m: ion mass, in kg
+    :param: q: ion charge, in Coulombs
+    :param: B: B field strength, in Tesla
+
+    :returns: gyroradius, in meters
     """
-    v = np.sqrt(8./np.pi * kB * T / m)
+    v = np.sqrt(8./np.pi * Qe * T / m)
+    rg = m * v / q / B
+    return rg
+
+
+def compute_gyroradii(df):
+    N = len(df)
+    M = len(_ions_of_interest)
+
+    # Matrix to hold the gyroradii
+    Rg = np.zeros((N, M + 1))
+
+    # Matrix to hold the errors
+    dX = np.zeros((N, M + 1))
+
+    ions = sorted(_ions_of_interest.keys())
+
+    for n, row in df.iterrows():
+        Lsep = row['L-Lsep (m)']
+        B0 = row['|B| (T)']
+        phi = row['Bangle (deg)']
+        Ti = row['Ti (eV)']
+
+        # The first column holds the x-position
+        Rg[n][0] = Lsep
+        dX[n][0] = Lsep
+
+        m = 1
+
+        for ion in ions:
+            ion_info = _ions_of_interest[ion]
+            Ai = ion_info['Ai']
+            Zi = ion_info['Zi']
+            qi = ion_info['qi'] * Qe
+
+            mi = Ai * amu2kg
+
+            rg = gyroradius(Ti, mi, qi, B0)
+            Rg[n][m] = rg
+
+            delta_x = rg / np.sin(np.pi/2 - phi*np.pi/180)
+            dX[n][m] = delta_x
+            m += 1
+
+    # Create pandas DFs so we can refer to columns by header
+    columns = ['L-Lsep (m)'] + [x.replace('n','') for x in ions]
+    Rg = pd.DataFrame(data = Rg, columns = columns)
+    dX = pd.DataFrame(data = dX, columns = columns)
+    return Rg, dX
+
+
+def plot_gyroradii(Rg, data_set_label):
+    _, ax = plt.subplots(figsize=(12,10))
+    ax.tick_params(axis = 'both', which = 'major', labelsize = 16)
+    ax.tick_params(axis = 'both', which = 'minor', labelsize = 16)
+
+
+    # First column holds L-Lsep
+    for ion in Rg.columns[1:]:
+        ax.semilogy(Rg['L-Lsep (m)'], Rg[ion], '.-', label = ion)
+
+    plt.ylabel('gyroradius (m)', fontsize = 16)
+    plt.xlabel('L-Lsep (m)', fontsize = 16)
+    plt.legend(prop=dict(size=16), ncol=3)
+    plt.title(data_set_label +' gyroradii', fontsize = 24)
+    plt.show()
 
 
 
-
-def format_hPIC_command_line_args(df_row, output_dir):
-    cla = ''
-
-    SimID = get_simulation_id(df_row)
-    cla += SimID + ' '
-
-    p1 = get_domain_debye_lengths(df_row)
-    p2 = get_grid_points_per_debye_length(df_row)
-    p3 = get_time_steps_per_gyroperiod(df_row)
-    p4 = get_num_ion_transit_times(df_row)
-    p5 = get_num_particles_per_cell(df_row)
-    cla += ' '.join((str(p) for p in (p1, p2, p3, p4, p5))) + ' '
-
-    B0 = df_row['|B| (T)']
-    psi = df_row['Bangle (deg)']
-    
-    Te = df_row['Te (eV)']
-    Ti = df_row['Ti (eV)']
-    cla += ' '.join(f'{x:.5f}' for x in (B0, psi, Te, Ti)) + ' '
-    
-    BC_LEFT_VALUE = 0.0
-    BC_RIGHT_VALUE = 0.0
-    cla += f'{BC_LEFT_VALUE:.5f} {BC_RIGHT_VALUE:.5f} '
-
-    # RF wave Frequency [rad/s
-    Omega = 0.0
-    RF_VOLTAGE_RIGHT = 0.0
-    RF_VOLTAGE_LEFT = 0.0
-    cla += f'{Omega:.2f} {RF_VOLTAGE_RIGHT:.2f} {RF_VOLTAGE_LEFT:.2f} '
-
-    # Global print and save options (defined at the top)
-    cla += f'{_KINFO} {_KGRID} {_KPART} {_KFLUID} '
-    
-    for ion, mass_info in _ions_of_interest.items():
-        Ai = mass_info['Ai']
-        Zi = mass_info['Zi']
-        ni = df_row[ion]
-
-        # Figure out gyroradius to make sure we're not intersecting the
-        # divertor early
-        mi = Ai * amu2kg
-        r_L = larmor_radius(Ti, mi, B0)
-
-        cla += f'{Ai} {Zi} {ni:.5e} '
-  
-
-    """
-    Pummi args
-    """
-
-    # Total number of submeshes in the domain
-    N = 1
-    cla += f'{N} '
-    # active mesh type segment in the i-th mesh
-    typeflag_i = 'uniform'
-
-    # number of Debye Lengths in the i-th mesh. Using a dummy value since
-    # we're using "uniform"
-    p1_i = '50'
-
-    # number of elements in the i-th submesh. Using dummy value since we're
-    # using "uniform"
-    Nel_i = '60'
-
-    # For the leftBL/rightBL, Number of minimum size cells in a Debye Length
-    # for the i-th submesh. Using dummy value since we're using "uniform"
-    p2_min_i = '0'
-    cla += '"' + '" "'.join((typeflag_i, p1_i, Nel_i, p2_min_i)) + '"'
-
-    return cla, SimID
-
-def get_data_set_label(datafile):
-    data_set_label = datafile.split('/')[-1].split('.')[0]
-    return data_set_label
+def plot_dX(dX, data_set_label):
+    _, ax = plt.subplots(figsize=(12,10))
+    ax.tick_params(axis = 'both', which = 'major', labelsize = 16)
+    ax.tick_params(axis = 'both', which = 'minor', labelsize = 16)
 
 
-def get_simulation_id(df_row):
-    """
-    One hPIC simulation per position relative to the Strike Point
-    """
-    separation = df_row['L-Lsep (m)']
-    sign = 'plus_' if separation > 0 else 'minus_'
-    simulation_id = f'{sign}{abs(separation):.3f}'+ 'm_separation'
-    return simulation_id
+    # First column holds L-Lsep
+    for ion in dX.columns[1:]:
+        ax.semilogy(dX['L-Lsep (m)'], dX[ion], '.-', label = ion)
 
-
-def mkdir(dirname):
-    if not os.path.exists(dirname):
-        os.mkdir(dirname)
+    plt.ylabel('$\\delta x$ (m)', fontsize = 16)
+    plt.xlabel('L-Lsep (m)', fontsize = 16)
+    plt.legend(prop=dict(size=16), ncol=3)
+    plt.title(data_set_label +' $\\delta x$', fontsize = 24)
+    plt.show()
 
 
 def main():
@@ -150,57 +126,11 @@ def main():
         print('usage: $python run_simulations.py <SOLPS_CSV_DATAFILE>')
         return
     datafile = sys.argv[1]
-
-    # Make a directory to hold the output of all simulations
-    results_dir = 'hpic_results'
-    mkdir(results_dir)
-
-    data_set_label = get_data_set_label(datafile)
-
-    # write commands to a bash script, to be executed in order to run
-    # simulations
-    simulation_script_filename = data_set_label + '.sh'
-    simulation_script = open(data_set_label + '.sh', 'w+')
-    simulation_script.write(
-        '#!/usr/bin/env bash\n'
-        + '\n'
-        + '# Generated by configure_simulations.py\n'
-        + '\n'
-        + '# Runs one hPIC simulation per row of data from SOLPS output\n'
-        + '# i.e one simulation per position from the strike point\n'
-        + '\n'
-        + '# Assumes compiled 1d3v hpic binary is in PATH\n\n\n',
-    )
-
-    df = load_solps_data(datafile)
-
-    # Make a directory to hold these results
-    data_set_output_dir = results_dir + '/' + data_set_label
-    mkdir(data_set_output_dir)
-
-    for index, row in df.iterrows():
-        hpic_args, SimID = format_hPIC_command_line_args(
-            row, data_set_output_dir,
-        )
-        
-        # Each simulation has its own directory
-        simulation_dir = data_set_output_dir + '/' + SimID
-        mkdir(data_set_output_dir + '/' + SimID)
-
-        # Write the simulation command to the bash script
-        simulation_script.write(
-            f'cd {simulation_dir}; hpic -command_line {hpic_args}; cd ../../..\n',
-        )
-
-
-    simulation_script.close()
-
-
-    # Make the file executable
-    os.chmod(
-        simulation_script_filename,
-        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
-    )
+    data_set_label = util.get_data_set_label(datafile)
+    df = util.load_solps_data(datafile, columns_subset = _columns_of_interest)
+    Rg, dX = compute_gyroradii(df)
+    plot_gyroradii(Rg, data_set_label)
+    plot_dX(dX, data_set_label)
 
 if __name__ == '__main__':
     main()

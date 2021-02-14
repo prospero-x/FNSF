@@ -27,7 +27,7 @@ Assuming raw data is from Jeremy already exists, format the data first (convert 
 ```bash
 scripts/format_data_files.sh solps_data/raw/solpsTargInner.txt
 ```
-A new directory `solps_data/formatted` will be created, as well as a formatted pure CSV at the location `solps_data/formatted/solpsTargInner.csv`
+A new formatted pure CSV at the location `solps_data/formatted/solpsTargInner.csv`
 
 To configure simulations for a specific data set (inner SP or outer SP):
 ```bash

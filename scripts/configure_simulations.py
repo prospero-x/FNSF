@@ -1,10 +1,11 @@
-import pandas as pd
 import sys
 import os
 import stat
-import columns
-from columns import _columns_of_interest, _ions_of_interest
+from columns import _ions_of_interest
+from compute_ion_gyroradii import gyroradius
+from compute_debye_lengths import compute_debye_length_for_row
 import util
+import scientific_constants as sc
 
 
 # Number of times info is printed to stdout
@@ -23,8 +24,28 @@ _KPART = 50
 _KFLUID = 50
 
 
+# Number of Gyroradii per domain
+_NGyro = 10
+
+
 def get_domain_debye_lengths(df_row):
-    p1 = 50
+    # Step 1: Compute Debye length.
+    debye_length = compute_debye_length_for_row(df_row)
+
+    # Step 2: Get Maximum gyroradius for all species of interest.
+    max_rg = 0
+    B0 = df_row['|B| (T)']
+    Ti = df_row['Ti (eV)']
+    for ion, ion_info in _ions_of_interest.items():
+        Ai = ion_info['Ai']
+        qi = ion_info['qi'] * sc.qe
+
+        mi = Ai * sc.amu2kg
+
+        rg = gyroradius(Ti, mi, qi, B0)
+        max_rg = max(max_rg, rg)
+
+    p1 = int(_NGyro * max_rg / debye_length)
     return p1
 
 
@@ -162,7 +183,7 @@ def main():
         + '# Assumes compiled 1d3v hpic binary is in PATH\n\n\n',
     )
 
-    df = util.load_solps_data(datafile, columns_subset = _columns_of_interest)
+    df = util.load_solps_data(datafile)
 
     # Make a directory to hold these results
     data_set_output_dir = results_dir + '/' + data_set_label

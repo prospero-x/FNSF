@@ -11,12 +11,12 @@ function format_data_files {
 	# what we want, but it still contains either a column or a
 	# space on the first character of every line, so we chop that off.
 
-	# 
+	#
 	# TODO: ask Jeremy to provide a CSV next time
 	rawdatafile=$1
 	datalabel=$2
 
-	sed  's/  \+/,/g' $rawdatafile | cut -c2- > $DATA_DIR/formatted/$datalabel.csv
+	sed  's/  \+/,/g' $rawdatafile | cut -c2- > $DATA_DIR/$datalabel.csv
 }
 
 rawdatafile=$1
@@ -27,6 +27,6 @@ if [ $# -eq 0 ]; then
 	exit -1
 fi
 
-mkdir -p $DATA_DIR/formatted
+mkdir -p $DATA_DIR
 
 format_data_files $rawdatafile $datalabel
