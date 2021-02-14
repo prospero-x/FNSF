@@ -1,6 +1,6 @@
 
 # Number of gyroradii in the domain
-ngyro: 200
+ngyro: 2000
 
 hpic_params:
     # p2: grid points per debye length

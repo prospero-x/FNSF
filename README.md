@@ -36,7 +36,7 @@ A new formatted pure CSV at the location `solps_data/formatted/solpsTargInner.cs
 
 To configure simulations for a specific data set (inner SP or outer SP):
 ```bash
-scripts/configure_simulations.py solps_data/cleaned/solpsTargInner.csv
+scripts/configure_simulations.py inner
 ```
 
 This creates an executable `scripts/run-hpic-olpsTargInner.sh` as well as a directory tree

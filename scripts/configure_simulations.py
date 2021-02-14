@@ -159,11 +159,18 @@ def mkdir(dirname):
 
 def main():
     if len(sys.argv) < 2:
-        print('usage: $python run_simulations.py <SOLPS_CSV_DATAFILE>')
+        print('usage: $python run_simulations.py "(inner|outer)"')
+        return
+
+    if sys.argv[1] == 'inner':
+        datafile = 'solps_data/solpsTargInner.csv'
+    elif sys.argv[1] == 'outer':
+        datafile = 'solps_data/solpsTargOuter.csv'
+    else:
+        print('please specify exactly one of: "(inner|outer)"')
         return
 
     # Load the data
-    datafile = sys.argv[1]
     df = util.load_solps_data(datafile)
 
     # Load config
