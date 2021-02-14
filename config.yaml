@@ -1,0 +1,23 @@
+
+# Number of gyroradii in the domain
+ngyro: 200
+
+hpic_params:
+    # p2: grid points per debye length
+    p2: 1
+
+    # p3: time steps per gyroperiod
+    p3: 20
+
+    # p4: num ion acoustic transit times
+    p4: 1
+
+    # p5: num particles per cell
+    p5: 500
+
+
+    kinfo: 10
+    kgrid: 50
+    kpart: 50
+    kfluid: 50
+

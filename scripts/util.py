@@ -1,6 +1,13 @@
 import pandas as pd
 import os
 import stat
+import yaml
+
+
+def load_config(filename):
+    with open(filename, 'r') as f:
+        y = yaml.load(f, Loader=yaml.FullLoader)
+    return y
 
 
 def load_solps_data(filename, columns_subset = None):
@@ -20,6 +27,7 @@ def mkdir(dirname):
 
 def make_executable(filename):
     os.chmod(filename, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
 
 def get_data_set_label(datafile):
     data_set_label = datafile.split('/')[-1].split('.')[0]

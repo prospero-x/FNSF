@@ -21,6 +21,11 @@ SHOULD run the following inside a virtualenv or pew environment
 pip install -r requirements.txt
 ```
 
+### Config
+`config.yaml` can supply parameters to each hpic simulation. If specified,
+these values will overrride hardcoded defaults.
+
+
 ### Commands
 
 Assuming raw data is from Jeremy already exists, format the data first (convert it from Jeremy Lori's sent raw data to usable CSV):

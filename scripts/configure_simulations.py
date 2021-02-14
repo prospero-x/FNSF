@@ -6,29 +6,25 @@ from compute_ion_gyroradii import gyroradius
 from compute_debye_lengths import compute_debye_length_for_row
 import util
 import scientific_constants as sc
+import yaml
 
 
-# Number of times info is printed to stdout
-_KINFO = 10
+"""Store parameters in this file used as arguments to hpic simulations"""
+_CONFIG_FILENAME = 'config.yaml'
+
+"""
+Values specified in the config override these defaults.
+"""
+_KINFO = 10  # Number of times info is printed to stdout
+_KGRID = 10  # Number of times GRIDDATA is saved
+_KPART = 10  # Number of times PARTICLEDATA is saved
+_KFLUID = 10 # Number of times fluid data is saved
+_NGyro = 10  # Number of Gyroradii per domain
 
 
-# Number of times GRIDDATA is saved
-_KGRID = 50
+def get_domain_debye_lengths(df_row, ngyro):
+    ngyro = ngyro or _NGyro
 
-
-# Number of times PARTICLEDATA is saved
-_KPART = 50
-
-
-# Number of times fluid data is saved
-_KFLUID = 50
-
-
-# Number of Gyroradii per domain
-_NGyro = 10
-
-
-def get_domain_debye_lengths(df_row):
     # Step 1: Compute Debye length.
     debye_length = compute_debye_length_for_row(df_row)
 
@@ -45,7 +41,7 @@ def get_domain_debye_lengths(df_row):
         rg = gyroradius(Ti, mi, qi, B0)
         max_rg = max(max_rg, rg)
 
-    p1 = int(_NGyro * max_rg / debye_length)
+    p1 = int(ngyro * max_rg / debye_length)
     return p1
 
 
@@ -69,18 +65,19 @@ def get_num_particles_per_cell(df_row):
     return p5
 
 
-def format_hPIC_command_line_args(df_row, output_dir):
+def format_hPIC_command_line_args(df_row, output_dir, hpic_params, ngyro):
     cla = ''
 
     SimID = get_simulation_id(df_row)
     cla += SimID + ' '
 
-    p1 = get_domain_debye_lengths(df_row)
-    p2 = get_grid_points_per_debye_length(df_row)
-    p3 = get_time_steps_per_gyroperiod(df_row)
-    p4 = get_num_ion_transit_times(df_row)
-    p5 = get_num_particles_per_cell(df_row)
+    p1 = hpic_params.get('p1') or get_domain_debye_lengths(df_row, ngyro)
+    p2 = hpic_params.get('p2') or get_grid_points_per_debye_length(df_row)
+    p3 = hpic_params.get('p3') or get_time_steps_per_gyroperiod(df_row)
+    p4 = hpic_params.get('p4') or get_num_ion_transit_times(df_row)
+    p5 = hpic_params.get('p5') or get_num_particles_per_cell(df_row)
     cla += ' '.join((str(p) for p in (p1, p2, p3, p4, p5))) + ' '
+
 
     B0 = df_row['|B| (T)']
     psi = df_row['Bangle (deg)']
@@ -100,7 +97,11 @@ def format_hPIC_command_line_args(df_row, output_dir):
     cla += f'{Omega:.2f} {RF_VOLTAGE_RIGHT:.2f} {RF_VOLTAGE_LEFT:.2f} '
 
     # Global print and save options (defined at the top)
-    cla += f'{_KINFO} {_KGRID} {_KPART} {_KFLUID} '
+    kinfo = hpic_params.get('kinfo') or _KINFO
+    kgrid = hpic_params.get('kgrid') or _KGRID
+    kpart = hpic_params.get('kpart') or _KPART
+    kfluid = hpic_params.get('kfluid') or _KFLUID
+    cla += f'{kinfo} {kgrid} {kpart} {kfluid} '
 
     for ion, mass_info in _ions_of_interest.items():
         Ai = mass_info['Ai']
@@ -160,7 +161,15 @@ def main():
     if len(sys.argv) < 2:
         print('usage: $python run_simulations.py <SOLPS_CSV_DATAFILE>')
         return
+
+    # Load the data
     datafile = sys.argv[1]
+    df = util.load_solps_data(datafile)
+
+    # Load config
+    config = util.load_config(_CONFIG_FILENAME)
+    ngyro = config.get('ngyro')
+    hpic_params = config.get('hpic_params', {})
 
     # Make a directory to hold the output of all simulations
     results_dir = 'hpic_results'
@@ -168,8 +177,8 @@ def main():
 
     data_set_label = get_data_set_label(datafile)
 
-    # write commands to a bash script, to be executed in order to run
-    # simulations
+    # create new bash scripts for commands. one hpic simulation is one line in the
+    # bash script.
     simulation_script_filename = 'scripts/run-hpic-' + data_set_label + '.sh'
     simulation_script = open(simulation_script_filename, 'w+')
     simulation_script.write(
@@ -183,18 +192,18 @@ def main():
         + '# Assumes compiled 1d3v hpic binary is in PATH\n\n\n',
     )
 
-    df = util.load_solps_data(datafile)
 
-    # Make a directory to hold these results
+    # Make a directory to hold the simulation results
     data_set_output_dir = results_dir + '/' + data_set_label
     util.mkdir(data_set_output_dir)
 
     for index, row in df.iterrows():
-        hpic_args, SimID = format_hPIC_command_line_args(
-            row, data_set_output_dir,
+        hpic_command_line_args, SimID = format_hPIC_command_line_args(
+            row, data_set_output_dir, hpic_params, ngyro
         )
 
-        # Each simulation has its own directory
+        # Each simulation has its own subdirectory. The hpic will run
+        # in that directory and save output files there.
         simulation_dir = data_set_output_dir + '/' + SimID
         util.mkdir(data_set_output_dir + '/' + SimID)
 
@@ -202,7 +211,7 @@ def main():
         simulation_script.write(
             f'# Run the simulation for {SimID}\n'
             + f'cd {simulation_dir}\n'
-            + f'hpic -command_line {hpic_args}\n'
+            + f'hpic -command_line {hpic_command_line_args}\n'
             + f' cd ../../..\n\n',
         )
 
