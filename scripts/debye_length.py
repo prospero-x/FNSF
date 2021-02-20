@@ -1,4 +1,4 @@
-from columns import _all_ions
+from common import _all_ions
 import util
 import sys
 import scientific_constants as sc
@@ -13,7 +13,7 @@ def compute_debye_length_for_row(df_row):
     """
     # Assumption: the electron density is equal to the sum of
     # all lithium, neon, and deuterium ion densities.
-    ne = sum(df_row[_all_ions])
+    ne = df_row['nD+1']
 
     Te = df_row['Te (eV)']
 
@@ -59,10 +59,10 @@ def plot_debye_lengths(debye_lengths, data_label):
 
 def main():
     if len(sys.argv) < 2:
-        print('usage: python compute_debye_lengths.py <DATAFILE>')
+        print('usage: python compute_debye_lengths.py (inner|outer)')
         return
 
-    datafile = sys.argv[1]
+    datafile = util.get_datafile(sys.argv[1])
     data_label = util.get_data_set_label(datafile)
     df = util.load_solps_data(datafile)
     debye_lengths = compute_debye_lengths(df)

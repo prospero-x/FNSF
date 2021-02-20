@@ -1,16 +1,26 @@
 import sys
 import os
 import stat
-from columns import _ions_of_interest
-from compute_ion_gyroradii import gyroradius
-from compute_debye_lengths import compute_debye_length_for_row
+from gyroradius import gyroradius_for_row
+from debye_length import compute_debye_length_for_row
 import util
+from common import DATAFILES, _MACHINE_ASSIGNMENTS_FILE, _ions_of_interest
 import scientific_constants as sc
 import yaml
 
 
 """Store parameters in this file used as arguments to hpic simulations"""
 _CONFIG_FILENAME = 'config.yaml'
+
+
+_HPIC_EXEC = '~/hPIC/hpic_1d3v/hpic'
+
+
+alt_hpic_execs = {
+    'my_machine': 'hpic',
+    'pc102': '~/hPIC-mikhail/hpic_1d3v/hpic',
+}
+
 
 """
 Values specified in the config override these defaults.
@@ -22,26 +32,15 @@ _KFLUID = 10 # Number of times fluid data is saved
 _NGyro = 10  # Number of Gyroradii per domain
 
 
-def get_domain_debye_lengths(df_row, ngyro):
+def get_domain_debye_lengths(df_row, ngyro, debye_length, rg):
+    """
+    :param: df_row: a single row of SOLPS output data
+    :param: ngyro: the number of gyroradii we want in the domain.
+    :param: debye length: the debye length at this location of the divertor (m)
+    :param: rg: the gyroradius of deuterium at this location (m)
+    """
     ngyro = ngyro or _NGyro
-
-    # Step 1: Compute Debye length.
-    debye_length = compute_debye_length_for_row(df_row)
-
-    # Step 2: Get Maximum gyroradius for all species of interest.
-    max_rg = 0
-    B0 = df_row['|B| (T)']
-    Ti = df_row['Ti (eV)']
-    for ion, ion_info in _ions_of_interest.items():
-        Ai = ion_info['Ai']
-        qi = ion_info['qi'] * sc.qe
-
-        mi = Ai * sc.amu2kg
-
-        rg = gyroradius(Ti, mi, qi, B0)
-        max_rg = max(max_rg, rg)
-
-    p1 = int(ngyro * max_rg / debye_length)
+    p1 = int(ngyro * rg / debye_length)
     return p1
 
 
@@ -65,18 +64,33 @@ def get_num_particles_per_cell(df_row):
     return p5
 
 
-def format_hPIC_command_line_args(df_row, output_dir, hpic_params, ngyro):
-    cla = ''
+def estimate_total_particle_pushes(rg, debye_length, ngyro):
+    """
+    estimate the number of pa
+    """
+    lmbda = ngyro * rg/debye_length
 
-    SimID = get_simulation_id(df_row)
-    cla += SimID + ' '
+    # linear regression
+    m = 168874526.0287417
+    b = -21784812391.707676
+    return int(m * lmbda + b)
 
-    p1 = hpic_params.get('p1') or get_domain_debye_lengths(df_row, ngyro)
+
+def format_hPIC_command(df_row, SimID, hpic_params, ngyro, ion_list):
+    command = f'{_HPIC_EXEC} -command_line '
+    command += SimID + ' '
+
+    rg = gyroradius_for_row(df_row)
+    debye_length = compute_debye_length_for_row(df_row)
+
+    total_particle_pushes = estimate_total_particle_pushes(rg, debye_length, ngyro)
+
+    p1 = hpic_params.get('p1') or get_domain_debye_lengths(df_row, ngyro, debye_length, rg)
     p2 = hpic_params.get('p2') or get_grid_points_per_debye_length(df_row)
     p3 = hpic_params.get('p3') or get_time_steps_per_gyroperiod(df_row)
     p4 = hpic_params.get('p4') or get_num_ion_transit_times(df_row)
     p5 = hpic_params.get('p5') or get_num_particles_per_cell(df_row)
-    cla += ' '.join((str(p) for p in (p1, p2, p3, p4, p5))) + ' '
+    command += ' '.join((str(p) for p in (p1, p2, p3, p4, p5))) + ' '
 
 
     B0 = df_row['|B| (T)']
@@ -84,71 +98,67 @@ def format_hPIC_command_line_args(df_row, output_dir, hpic_params, ngyro):
 
     Te = df_row['Te (eV)']
     Ti = df_row['Ti (eV)']
-    cla += ' '.join(f'{x:.5f}' for x in (B0, psi, Te, Ti)) + ' '
+    command += ' '.join(f'{x:.5f}' for x in (B0, psi, Te, Ti)) + ' '
 
     BC_LEFT_VALUE = 0.0
     BC_RIGHT_VALUE = 0.0
-    cla += f'{BC_LEFT_VALUE:.5f} {BC_RIGHT_VALUE:.5f} '
+    command += f'{BC_LEFT_VALUE:.5f} {BC_RIGHT_VALUE:.5f} '
 
     # RF wave Frequency [rad/s
     Omega = 0.0
     RF_VOLTAGE_RIGHT = 0.0
     RF_VOLTAGE_LEFT = 0.0
-    cla += f'{Omega:.2f} {RF_VOLTAGE_RIGHT:.2f} {RF_VOLTAGE_LEFT:.2f} '
+    command += f'{Omega:.2f} {RF_VOLTAGE_RIGHT:.2f} {RF_VOLTAGE_LEFT:.2f} '
 
     # Global print and save options (defined at the top)
     kinfo = hpic_params.get('kinfo') or _KINFO
     kgrid = hpic_params.get('kgrid') or _KGRID
     kpart = hpic_params.get('kpart') or _KPART
     kfluid = hpic_params.get('kfluid') or _KFLUID
-    cla += f'{kinfo} {kgrid} {kpart} {kfluid} '
+    command += f'{kinfo} {kgrid} {kpart} {kfluid} '
 
-    for ion, mass_info in _ions_of_interest.items():
-        Ai = mass_info['Ai']
-        Zi = mass_info['Zi']
+    # Add each species to the command line
+    for ion in ion_list:
+        ion_info = _ions_of_interest[ion]
+        Ai = ion_info['Ai']
+        Zi = ion_info['Zi']
         ni = df_row[ion]
 
-        cla += f'{Ai} {Zi} {ni:.5e} '
-
+        command += f'{Ai} {Zi} {ni:.5e} '
 
     """
     Pummi args
     """
 
     # Total number of submeshes in the domain
-    N = 1
-    cla += f'{N} '
+    N = 3
+    command += f'{N} '
     # active mesh type segment in the i-th mesh
-    typeflag_i = 'uniform'
+    typeflag_i = 'leftBL,uniform,rightBL'
 
     # number of Debye Lengths in the i-th mesh. Using a dummy value since
     # we're using "uniform"
-    p1_i = '50'
+    p1_i = f'{int(rg/debye_length)},{int(rg*ngyro/debye_length)},{int(rg/debye_length)}'
 
     # number of elements in the i-th submesh. Using dummy value since we're
     # using "uniform"
-    Nel_i = '60'
+    Nel_i = f'40,400,40'
 
     # For the leftBL/rightBL, Number of minimum size cells in a Debye Length
     # for the i-th submesh. Using dummy value since we're using "uniform"
-    p2_min_i = '0'
-    cla += '"' + '" "'.join((typeflag_i, p1_i, Nel_i, p2_min_i)) + '"'
+    p2_min_i = '1.0,1.0,1.0'
+    command += '"' + '" "'.join((typeflag_i, p1_i, Nel_i, p2_min_i)) + '"'
 
-    return cla, SimID
-
-
-def get_data_set_label(datafile):
-    data_set_label = datafile.split('/')[-1].split('.')[0]
-    return data_set_label
+    return command
 
 
-def get_simulation_id(df_row):
+def get_simulation_id(data_set_label, df_row):
     """
     One hPIC simulation per position relative to the Strike Point
     """
     separation = df_row['L-Lsep (m)']
     sign = 'plus_' if separation > 0 else 'minus_'
-    simulation_id = f'{sign}{abs(separation):.3f}'+ 'm_separation'
+    simulation_id = f'{data_set_label}_sop_{sign}{abs(separation):.3f}'+ 'm_from_sp'
     return simulation_id
 
 
@@ -158,72 +168,125 @@ def mkdir(dirname):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print('usage: $python run_simulations.py "(inner|outer)"')
-        return
-
-    if sys.argv[1] == 'inner':
-        datafile = 'solps_data/solpsTargInner.csv'
-    elif sys.argv[1] == 'outer':
-        datafile = 'solps_data/solpsTargOuter.csv'
-    else:
-        print('please specify exactly one of: "(inner|outer)"')
-        return
-
-    # Load the data
-    df = util.load_solps_data(datafile)
-
     # Load config
-    config = util.load_config(_CONFIG_FILENAME)
+    config = util.load_yaml(_CONFIG_FILENAME)
     ngyro = config.get('ngyro')
     hpic_params = config.get('hpic_params', {})
+    ions = config.get('ions')
+    if ions is not None:
+        ion_list = [list(x.keys())[0] for x in ions]
+    else:
+        ion_list = sorted(_ions_of_interest.keys())
 
-    # Make a directory to hold the output of all simulations
-    results_dir = 'hpic_results'
-    mkdir(results_dir)
+    # Load machine assignments
+    machine_assignments = util.load_yaml(_MACHINE_ASSIGNMENTS_FILE)
 
-    data_set_label = get_data_set_label(datafile)
+    datafiles = DATAFILES
 
-    # create new bash scripts for commands. one hpic simulation is one line in the
-    # bash script.
-    simulation_script_filename = 'scripts/run-hpic-' + data_set_label + '.sh'
-    simulation_script = open(simulation_script_filename, 'w+')
-    simulation_script.write(
-        '#!/usr/bin/env bash\n'
-        + '\n'
-        + '# Generated by configure_simulations.py\n'
-        + '\n'
-        + '# Runs one hPIC simulation per row of data from SOLPS output\n'
-        + '# i.e one simulation per position from the strike point\n'
-        + '\n'
-        + '# Assumes compiled 1d3v hpic binary is in PATH\n\n\n',
-    )
+    hpic_commands = {}
+    for label, datafile in datafiles.items():
+        append_to_hpic_commands(
+            datafile,
+            label,
+            hpic_params,
+            ngyro,
+            ion_list,
+            hpic_commands,
+        )
+
+    build_simulation_bash_scripts(hpic_commands, machine_assignments)
 
 
-    # Make a directory to hold the simulation results
-    data_set_output_dir = results_dir + '/' + data_set_label
-    util.mkdir(data_set_output_dir)
+def append_to_hpic_commands(
+        datafile,
+        data_set_label,
+        hpic_params,
+        ngyro,
+        ion_list,
+        hpic_commands):
 
+    df = util.load_solps_data(datafile)
     for index, row in df.iterrows():
-        hpic_command_line_args, SimID = format_hPIC_command_line_args(
-            row, data_set_output_dir, hpic_params, ngyro
+        SimID = get_simulation_id(data_set_label, row)
+        hpic_command_line_args = format_hPIC_command(
+            row,
+            SimID,
+            hpic_params,
+            ngyro,
+            ion_list,
         )
+        hpic_commands[SimID] = hpic_command_line_args
 
-        # Each simulation has its own subdirectory. The hpic will run
-        # in that directory and save output files there.
-        simulation_dir = data_set_output_dir + '/' + SimID
-        util.mkdir(data_set_output_dir + '/' + SimID)
 
-        # Write the simulation command to the bash script
-        simulation_script.write(
-            f'# Run the simulation for {SimID}\n'
-            + f'cd {simulation_dir}\n'
-            + f'hpic -command_line {hpic_command_line_args}\n'
-            + f' cd ../../..\n\n',
-        )
+def build_simulation_bash_scripts(hpic_commands, machine_assignments):
+    base_dir = 'generated'
+    util.mkdir(base_dir)
 
-    simulation_script.close()
-    util.make_executable(simulation_script_filename)
+    for machine_name, assignments in machine_assignments.items():
+        # create new bash scripts for commands. one hpic simulation is one line in the
+        # bash script.
+        parent_script_name = f'{base_dir}/run_hpic_fnsf_solps_{machine_name}.sh'
+        parent_script = open(parent_script_name, 'w+')
+        parent_script.write('''
+#!/usr/bin/env bash
+
+# Generated by configure_simulations.py
+
+# Runs one hPIC simulation per row of data from SOLPS output
+# i.e one simulation per position from the strike point
+
+declare -a pids
+i=0
+''')
+
+        # hPIC output will be saved in subdirs, the tree of which must be
+        # made by a script too.
+        mkdir_script_filename = f'{base_dir}/mkdirs_{machine_name}.sh'
+        mkdir_script = open(mkdir_script_filename, 'w+')
+        mkdir_script.write('#!/usr/bin/env bash\n')
+
+        for SimID in assignments:
+            hpic_command = hpic_commands[SimID]
+
+            if machine_name in alt_hpic_execs:
+                alt_hpic_exec = alt_hpic_execs[machine_name]
+                hpic_command = hpic_command.replace(_HPIC_EXEC, alt_hpic_exec)
+
+            # Before the simulation script runs, another script must parse it
+            # and create all the necessary directories
+
+            simulation_dir = f'hpic_results/{SimID}'
+            mkdir_script.write(f'mkdir -p {simulation_dir}\n')
+            simulation_script_name = f'{base_dir}/{SimID}_{machine_name}.sh'
+            simulation_script = open(simulation_script_name, 'w+')
+
+            # Write the simulation command to the bash script
+            simulation_script.write(f'''
+# Run the simulation for {SimID}
+cd {simulation_dir}
+date +%Y-%m-%dT%H:%M:%S-%Z > simulation-start
+{hpic_command} > hpic.log 2>&1
+date +%Y-%m-%dT%H:%M:%S-%Z > simulation-complete''')
+
+            simulation_script.close()
+            util.make_executable(simulation_script_name)
+
+            child_script_name = simulation_script_name.replace('generated/', '')
+            parent_script.write(f'''
+./{child_script_name} &
+pids[$i]=$!
+i=$((i+1))''')
+
+        parent_script.write('''
+# wait for everyone to finish
+for pid in ${pids[*]};do
+    wait $pid
+done''')
+        parent_script.close()
+        util.make_executable(parent_script_name)
+
+        mkdir_script.close()
+        util.make_executable(mkdir_script_filename)
 
 
 if __name__ == '__main__':

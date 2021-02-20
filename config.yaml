@@ -1,6 +1,7 @@
 
 # Number of gyroradii in the domain
-ngyro: 2000
+ngyro: 10
+
 
 hpic_params:
     # p2: grid points per debye length
@@ -20,4 +21,63 @@ hpic_params:
     kgrid: 50
     kpart: 50
     kfluid: 50
+
+
+# Make the order of ions deterministic. The point of this is to be able to
+# to interpret the results of hPIC and not conduse species with one another.
+ions:
+
+    - nD+1:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp0
+
+    - nNe+1:
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp1
+
+    - nNe+2:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp2
+
+    - nNe+3:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp3
+
+    - nNe+4:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp4
+
+    - nNe+5:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp5
+
+    - nNe+6:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp6
+
+    - nNe+7:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp7
+
+    - nNe+8:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp8
+
+    - nNe+9:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp9
+
+    - nNe+10:
+
+        # hpic_label is whatever hPIC is going to call this species
+        hpic_label: sp10
 

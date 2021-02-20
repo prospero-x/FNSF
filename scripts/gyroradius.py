@@ -1,9 +1,11 @@
 import sys
-from columns import _columns_of_interest, _ions_of_interest
+from common import _columns_of_interest, _ions_of_interest
 import util
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import scientific_constants as sc
+
 
 """
 This script is meant to be a sanity check on the SOLPS data. We want
@@ -20,6 +22,31 @@ amu2kg = 1.6605e-27
 
 # Boltzmann Constant [J/K]
 kB = 1.380649e-23
+
+
+def gyroradius_for_row(df_row):
+    """
+    Calculate the gyroradius given a row (i.e. a LOCATION) at the divertor.
+
+    Since all other ions have a low density compared to deuterium, we consider
+    ONLY the deuterium mass/charge when determining the gyroradius.
+
+    :param: df_row: a single row in the SOLPS output data.
+    :returns: gyroradius, in meters
+    """
+
+    B0 = df_row['|B| (T)']
+    Ti = df_row['Ti (eV)']
+
+    dt_ion_info = _ions_of_interest['nD+1']
+    A_D = dt_ion_info['Ai']
+    q_D = dt_ion_info['qi'] * sc.qe
+    m_D = A_D * sc.amu2kg
+
+    # Since all other ions have a low density compared to deuterium,
+    # consider ONLY the deuterium mass/charge to determine the gyroradius.
+    rg = gyroradius(Ti, m_D, q_D, B0)
+    return rg
 
 
 def gyroradius(T, m, q, B):
@@ -117,15 +144,16 @@ def plot_dX(dX, data_set_label):
     plt.ylabel('$\\delta x$ (m)', fontsize = 16)
     plt.xlabel('L-Lsep (m)', fontsize = 16)
     plt.legend(prop=dict(size=16), ncol=3)
-    plt.title(data_set_label +' $\\delta x$', fontsize = 24)
+    plt.title(data_set_label +'Intersection Error $\\delta x$', fontsize = 24)
     plt.show()
 
 
 def main():
     if len(sys.argv) < 2:
-        print('usage: $python run_simulations.py <SOLPS_CSV_DATAFILE>')
+        print('usage: $python compute_ion_gyroradii.py (inner|outer )')
         return
-    datafile = sys.argv[1]
+    datafile_keyword = sys.argv[1]
+    datafile = util.get_datafile(datafile_keyword)
     data_set_label = util.get_data_set_label(datafile)
     df = util.load_solps_data(datafile, columns_subset = _columns_of_interest)
     Rg, dX = compute_gyroradii(df)

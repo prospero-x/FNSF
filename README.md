@@ -36,7 +36,7 @@ A new formatted pure CSV at the location `solps_data/formatted/solpsTargInner.cs
 
 To configure simulations for a specific data set (inner SP or outer SP):
 ```bash
-scripts/configure_simulations.py inner
+scripts/configure_simulations.py
 ```
 
 This creates an executable `scripts/run-hpic-olpsTargInner.sh` as well as a directory tree
@@ -47,5 +47,13 @@ To run the simulations for a specific data set (inner SP or outer SP), run:
 ```bash
 scripts/run-hpic-solpsTargInner.sh
 ```
+
+procedure:
+1. choose ngyro
+2. make 3-step mesh (pummi)
+3. read nt and npart from hpic, use that to estimate total running time
+4. do split_work
+5. configure_simulations
+5. scp scripts onto boxes and run
 
 

@@ -2,9 +2,20 @@ import pandas as pd
 import os
 import stat
 import yaml
+import sys
 
 
-def load_config(filename):
+def get_datafile(keyword):
+    if keyword == 'inner':
+        return 'solps_data/solpsTargInner.csv'
+    elif keyword == 'outer':
+        return 'solps_data/solpsTargOuter.csv'
+    else:
+        print('please specify one if: (inner|outer)')
+        sys.exit(1)
+
+
+def load_yaml(filename):
     with open(filename, 'r') as f:
         y = yaml.load(f, Loader=yaml.FullLoader)
     return y
@@ -27,13 +38,4 @@ def mkdir(dirname):
 
 def make_executable(filename):
     os.chmod(filename, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-
-def get_data_set_label(datafile):
-    data_set_label = datafile.split('/')[-1].split('.')[0]
-    _labels = {
-        'solpsTargInner': 'Inner Strike Point',
-        'solpsTargOuter': 'Outer Strike Point',
-    }
-    return _labels[data_set_label]
 

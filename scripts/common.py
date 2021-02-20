@@ -1,4 +1,11 @@
 
+DATAFILES = {
+    'inner': 'solps_data/solpsTargInner.csv',
+    'outer': 'solps_data/solpsTargOuter.csv',
+}
+
+_MACHINE_ASSIGNMENTS_FILE =  'machine_assignments.yaml'
+
 
 _columns_of_interest = [
     'L-Lsep (m)',
@@ -44,15 +51,15 @@ _columns_of_interest = [
 # Each ion with it charge number and (average) atomic mass
 _ions_of_interest = {
     'nD+1':   {'Ai': 2.014,   'Zi': 1,  'qi': 1},
-    'nNe+1':  {'Ai': 20.1797, 'Zi': 10, 'qi': 1},
-    'nNe+2':  {'Ai': 20.1797, 'Zi': 10, 'qi': 2},
-    'nNe+3':  {'Ai': 20.1797, 'Zi': 10, 'qi': 3},
-    'nNe+4':  {'Ai': 20.1797, 'Zi': 10, 'qi': 4},
-    'nNe+5':  {'Ai': 20.1797, 'Zi': 10, 'qi': 5},
-    'nNe+6':  {'Ai': 20.1797, 'Zi': 10, 'qi': 6},
-    'nNe+7':  {'Ai': 20.1797, 'Zi': 10, 'qi': 7},
-    'nNe+8':  {'Ai': 20.1797, 'Zi': 10, 'qi': 8},
-    'nNe+9':  {'Ai': 20.1797, 'Zi': 10, 'qi': 9},
+    'nNe+1':  {'Ai': 20.1797, 'Zi': 1, 'qi': 1},
+    'nNe+2':  {'Ai': 20.1797, 'Zi': 2, 'qi': 2},
+    'nNe+3':  {'Ai': 20.1797, 'Zi': 3, 'qi': 3},
+    'nNe+4':  {'Ai': 20.1797, 'Zi': 4, 'qi': 4},
+    'nNe+5':  {'Ai': 20.1797, 'Zi': 5, 'qi': 5},
+    'nNe+6':  {'Ai': 20.1797, 'Zi': 6, 'qi': 6},
+    'nNe+7':  {'Ai': 20.1797, 'Zi': 7, 'qi': 7},
+    'nNe+8':  {'Ai': 20.1797, 'Zi': 8, 'qi': 8},
+    'nNe+9':  {'Ai': 20.1797, 'Zi': 9, 'qi': 9},
     'nNe+10': {'Ai': 20.1797, 'Zi': 10, 'qi': 10},
 }
 
@@ -73,4 +80,12 @@ _all_ions = [
     'nNe+1',
     'nD+1',
 ]
+
+def get_data_set_label(datafile):
+    data_set_label = datafile.split('/')[-1].split('.')[0]
+    _labels = {
+        'solpsTargInner': 'Inner Strike Point',
+        'solpsTargOuter': 'Outer Strike Point',
+    }
+    return _labels[data_set_label]
 

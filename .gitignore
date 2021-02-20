@@ -1,7 +1,7 @@
 __pycache__
 
 # Generated bash scripts to run simulations
-scripts/run-hpic*.sh
+generated/
 
 # Output directory holding simulation results
 hpic_results/
