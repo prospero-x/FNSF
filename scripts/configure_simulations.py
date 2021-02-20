@@ -262,11 +262,16 @@ i=0
 
             # Write the simulation command to the bash script
             simulation_script.write(f'''
+#!/usr/bin/env bash
+
 # Run the simulation for {SimID}
 cd {simulation_dir}
 date +%Y-%m-%dT%H:%M:%S-%Z > simulation-start
 {hpic_command} > hpic.log 2>&1
-date +%Y-%m-%dT%H:%M:%S-%Z > simulation-complete''')
+if [ $? -eq 0 ]; then
+    date +%Y-%m-%dT%H:%M:%S-%Z > simulation-complete
+fi
+''')
 
             simulation_script.close()
             util.make_executable(simulation_script_name)
