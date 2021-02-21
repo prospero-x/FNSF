@@ -1,0 +1,11 @@
+# All the LCPP boxes on which we want to parallelize hpic sims.
+# Assuming that these hostnames are defined in ~/.ssh/config, i.e.
+# they can be ssh'd to with: "$ ssh pc85". Also assuming that my
+# ssh public key is in each remote hosts ~/.ssh/authorized_keys file.
+
+
+pc85
+pc101
+pc102
+pc103
+pc201
