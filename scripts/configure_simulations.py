@@ -219,7 +219,7 @@ def append_to_hpic_commands(
 
 
 def build_simulation_bash_scripts(hpic_commands, machine_assignments):
-    base_dir = 'generated'
+    base_dir = 'remote_scripts/generated'
     util.mkdir(base_dir)
 
     for machine_name, assignments in machine_assignments.items():
@@ -276,7 +276,7 @@ fi
             simulation_script.close()
             util.make_executable(simulation_script_name)
 
-            child_script_name = simulation_script_name.replace('generated/', '')
+            child_script_name = simulation_script_name.replace(f'{base_dir}/', '')
             parent_script.write(f'''
 ./{child_script_name} &
 pids[$i]=$!
