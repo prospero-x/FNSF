@@ -1,4 +1,4 @@
-from common import _all_ions
+from common import _all_ions, get_data_set_label
 import util
 import sys
 import scientific_constants as sc
@@ -63,7 +63,7 @@ def main():
         return
 
     datafile = util.get_datafile(sys.argv[1])
-    data_label = util.get_data_set_label(datafile)
+    data_label = get_data_set_label(datafile)
     df = util.load_solps_data(datafile)
     debye_lengths = compute_debye_lengths(df)
     plot_debye_lengths(debye_lengths, data_label)

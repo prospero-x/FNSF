@@ -178,8 +178,7 @@ def main():
     else:
         ion_list = sorted(_ions_of_interest.keys())
 
-    # Load machine assignments
-    machine_assignments = util.load_yaml(_MACHINE_ASSIGNMENTS_FILE)
+
 
     datafiles = DATAFILES
 
@@ -194,7 +193,13 @@ def main():
             hpic_commands,
         )
 
-    build_simulation_bash_scripts(hpic_commands, machine_assignments)
+    if len(sys.argv) > 1:
+        if sys.argv[1] != 'configure-total-pushes-script':
+            print('usage: python configure_simulations.py [configure-total-pushes-script]')
+            return
+        build_prelim_bash_script(hpic_commands)
+    else:
+        build_simulation_bash_scripts(hpic_commands)
 
 
 def append_to_hpic_commands(
@@ -203,6 +208,7 @@ def append_to_hpic_commands(
         hpic_params,
         ngyro,
         ion_list,
+
         hpic_commands):
 
     df = util.load_solps_data(datafile)
@@ -218,7 +224,42 @@ def append_to_hpic_commands(
         hpic_commands[SimID] = hpic_command_line_args
 
 
-def build_simulation_bash_scripts(hpic_commands, machine_assignments):
+def build_prelim_bash_script(hpic_commands):
+    """
+    This functino puts all of the hpic commands into one big shell script. It
+    is meant to be run on a temporarily modified hPIC executable which accepts
+    parameters as it normall does, but prints the total number of particle
+    pushes that will happen during the simulation to STDOUT, and then
+    immediately exit.
+    """
+    base_dir = 'scripts'
+    util.mkdir(base_dir)
+    prelim_script_name = f'{base_dir}/get_total_pushes.sh'
+    prelim_script = open(prelim_script_name, 'w+')
+    prelim_script.write('''
+#!/usr/bin/env bash
+
+# This script is meant to be run in order to let hPIC calculate the total
+# number of particle pushes (i.e., number of particles * number of time steps)
+# which will be involved in a given simulation.
+
+# The goal is to use this information to characterize the amount of work associated
+# with each simulation, and optimize assignments of many hPIC simulation across many
+# machines.
+''')
+    util.mkdir(base_dir)
+    for SimID, hpic_command in hpic_commands.items():
+        # Write the simulation command to the bash script
+        prelim_script.write(f'echo {SimID}, $({hpic_command} | tail -n 1)\n')
+
+
+    prelim_script.close()
+    util.make_executable(prelim_script_name)
+
+
+def build_simulation_bash_scripts(hpic_commands):
+    machine_assignments = util.load_yaml(_MACHINE_ASSIGNMENTS_FILE)
+
     base_dir = 'remote_scripts/generated'
     util.mkdir(base_dir)
 

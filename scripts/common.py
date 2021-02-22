@@ -84,8 +84,8 @@ _all_ions = [
 def get_data_set_label(datafile):
     data_set_label = datafile.split('/')[-1].split('.')[0]
     _labels = {
-        'solpsTargInner': 'Inner Strike Point',
-        'solpsTargOuter': 'Outer Strike Point',
+        'solpsTargInner': 'Inner SOP',
+        'solpsTargOuter': 'Outer SOP',
     }
     return _labels[data_set_label]
 

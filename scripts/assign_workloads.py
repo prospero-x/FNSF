@@ -10,7 +10,7 @@ a single hPIC simulation represents.
 """
 
 """
-If Box Bi can run a single hPIC simulation at vi particles/second,
+If Box Bi can run a single hPIC simulation at speed vi (particles/second),
 then it should be assigned vi/sum_i^n(vi) fraction of the work.
 
 But what if Bi has M cores? then it can process M*vi particles/second.
@@ -107,7 +107,7 @@ def assign_workloads(simulation_work_fractions, machine_bandwidths):
 def main():
     # CSV containing two columns: SIM_ID, TOTAL_HPIC_PARTICLE_PUSHES
     if len(sys.argv) < 2:
-        print('usage: python split_up_work <DATAFILE>')
+        print('usage: python assign_workloads.py <DATAFILE>')
         sys.exit(1)
     datafile = sys.argv[1]
     workload_fractions = get_fractional_workload_of_each_simulation(datafile)

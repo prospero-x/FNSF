@@ -1,5 +1,5 @@
 import sys
-from common import _columns_of_interest, _ions_of_interest
+from common import _columns_of_interest, _ions_of_interest, get_data_set_label
 import util
 import numpy as np
 import pandas as pd
@@ -154,7 +154,7 @@ def main():
         return
     datafile_keyword = sys.argv[1]
     datafile = util.get_datafile(datafile_keyword)
-    data_set_label = util.get_data_set_label(datafile)
+    data_set_label = get_data_set_label(datafile)
     df = util.load_solps_data(datafile, columns_subset = _columns_of_interest)
     Rg, dX = compute_gyroradii(df)
     plot_gyroradii(Rg, data_set_label)

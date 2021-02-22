@@ -7,3 +7,6 @@ generated/
 hpic_results/
 
 *.mp4
+
+# Script specific to hpic simulations
+get_total_pushes.sh
