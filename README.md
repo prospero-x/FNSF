@@ -63,7 +63,7 @@ Next, recompile `hpic`.
 
 , run the following commands:
 ```bash
-$ python scripts/configure_simulations.py configure_total_pushes
+$ python scripts/configure_simulations.py configure-total-pushes-script
 $ scripts/get_total_pushes.sh > total_pushes.csv
 ```
 
