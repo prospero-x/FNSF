@@ -19,7 +19,7 @@ hpic_params:
 
     kinfo: 10
     kgrid: 50
-    kpart: 50
+    kpart: 0
     kfluid: 50
 
 
