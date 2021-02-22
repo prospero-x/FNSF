@@ -23,23 +23,24 @@ from datetime import datetime
 DEFAULT_DATE = datetime(1970,1,1,0,0,0)
 start = end = DEFAULT_DATE
 
-SimID = sys.argv[1].split("hpic_results/")[1]
-if len(sys.argv) < 3:
-    print(f"{SimID:35} not started!")
-    sys.exit(0)
-
-start = datetime.strptime(sys.argv[2], "%Y-%m-%dT%H:%M:%S-%Z")
+hostname = sys.argv[1]
+SimID = sys.argv[2].split("hpic_results/")[1]
 if len(sys.argv) < 4:
-    print(f"{SimID:35} still running")
+    print(f"{hostname}: {SimID:35} not started!")
     sys.exit(0)
 
-end = datetime.strptime(sys.argv[3], "%Y-%m-%dT%H:%M:%S-%Z")
+start = datetime.strptime(sys.argv[3], "%Y-%m-%dT%H:%M:%S-%Z")
+if len(sys.argv) < 5:
+    print(f"{hostname}: {SimID:35} still running")
+    sys.exit(0)
+
+end = datetime.strptime(sys.argv[4], "%Y-%m-%dT%H:%M:%S-%Z")
 
 # Maybe the previous hPIC run failed, in which case "simulation-complete"
 # MIGHT exist, but with a stale timestemp.
 if end > start:
-    print(f"{SimID:35} done (took {end - start})")
+    print(f"{hostname}: {SimID:35} done (took {end - start})")
 else:
-    print(f"{SimID:35} still running")''' $SimID $start $end
+    print(f"{hostname}: {SimID:35} still running")''' $(hostname) $SimID $start $end
  done
 

@@ -89,3 +89,28 @@ def get_data_set_label(datafile):
     }
     return _labels[data_set_label]
 
+
+import re
+
+def get_dataset_from_SimID(SimID):
+    """
+        Example: SimID: outer_sop_minus_0.002m_from_sp
+            returns: 'outer'
+    """
+    try:
+        dataset = re.search('(outer|inner)', SimID).group()
+    except AttributeError:
+        breakpoint()
+    return dataset
+
+
+def get_Lsep_from_SimID(SimID):
+    """
+    Example: SimID: outer_sop_minus_0.002m_from_sp
+        returns: -0.002
+    """
+    Lsep_str = re.search('(plus|minus)_[0-9].[0-9]{1,3}', SimID).group()
+    sign, val = Lsep_str.split('_')
+    sign = 1 if sign == 'plus' else -1
+    return sign * float(val)
+

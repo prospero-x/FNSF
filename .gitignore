@@ -5,3 +5,5 @@ generated/
 
 # Output directory holding simulation results
 hpic_results/
+
+*.mp4
