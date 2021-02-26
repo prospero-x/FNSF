@@ -12,5 +12,7 @@ Deuterium particles in simulation: 234367
 debye length for this simulation: 5e-7m
 
 therefore: domain is 906 * 5e-7 = 4.53e-4m
-In a region this big, there should be: 
+In a region this big, there should be:
+
+How to interprate line 0 of the IEAD?
 

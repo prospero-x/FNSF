@@ -8,6 +8,7 @@ import scientific_constants as sc
 import glob
 import re
 
+
 """
 This script is used to generate input files for RustBCA simulations.
 
@@ -15,6 +16,10 @@ After running this script, one directory for each energy is created, and in
 each directory a subdirectory for each y-offset is created. Inside each
 subdirectory, an input.toml file is created for RustBCA to use.
 """
+
+# In my understanding, the first row of the IEAD corresponds to 0 energy, which
+# means it must be skipped (Rustbca doesn't like 0 energy incident particles)
+IEAD_START_INDEX = 1
 
 
 def get_target_height_and_length():
@@ -52,7 +57,7 @@ def get_simulation_boundary_points(broadening_factor = 0.05):
     return sb1, sb2, sb3, sb4
 
 
-def get_target_mesh_coordinate_sets(height, length):
+def get_target_mesh_triangles(height, length):
     b1, b2, b3, b4 = get_target_boundary_points(height, length)
     triangle1 = [b2[0], b1[0], b3[0], b2[1], b1[1], b3[1]]
     triangle2 = [b2[0], b4[0], b3[0], b2[1], b4[1], b3[1]]
@@ -66,6 +71,7 @@ def generate_rustbca_input(
     num_chunks,
     input_filename):
 
+    print(f'building {input_filename}...')
     options = {
         'name': name,
         'track_trajectories': False,
@@ -73,11 +79,11 @@ def generate_rustbca_input(
         'track_displacements': False,
         'track_energy_losses': False,
         'track_recoil_trajectories': False,
-        'stream_size': 8000,
+        'write_buffer_size': 8000,
         'weak_collision_order': 0,
         'suppress_deep_recoils': False,
         'high_energy_free_flight_paths': False,
-        'num_threads': 8,
+        'num_threads': 12,
         'num_chunks': num_chunks,
         'use_hdf5': False,
         'electronic_stopping_mode': 'LOW_ENERGY_LOCAL', # Jon - Low energy local better for gas
@@ -117,7 +123,6 @@ def generate_rustbca_input(
         'Z': [Z_target],
         'm': [m_target] ,
         'interaction_index': [0],
-        'electronic_stopping_correction_factor': 1.0,
         'surface_binding_model': "AVERAGE"
     }
 
@@ -125,14 +130,15 @@ def generate_rustbca_input(
     energy_barrier_thickness = (n_target)**(-1./3.)/np.sqrt(2.*np.pi)
 
     target_boundary_points = get_target_boundary_points(height, length)
-
+    triangles = get_target_mesh_triangles(height, length)
     mesh_2d_input = {
         'length_unit': 'MICRON',
-        'coordinate_sets': get_target_mesh_coordinate_sets(height, length),
-        'densities': [[n_target], [n_target]],
-        'boundary_points': target_boundary_points,
-        'simulation_boundary_points': get_simulation_boundary_points(),
         'energy_barrier_thickness': energy_barrier_thickness,
+        'triangles': triangles,
+        'densities': [[n_target]] * len(triangles),
+        'material_boundary_points': target_boundary_points,
+        'simulation_boundary_points': get_simulation_boundary_points(broadening_factor=1),
+        'electronic_stopping_correction_factors': [ 1.1 ] * len(triangles) ,
     }
 
 
@@ -192,7 +198,7 @@ def get_particle_parameters(
     # first 90 elements:0 * max_E / 24
     # next 90 elements: 1 * max_E / 24
     # ...
-    incident_energies = [Ei  * max_E / N_e for Ei in range(N_e) for _ in range(90)]
+    incident_energies = [Ei  * max_E / N_e for Ei in range(IEAD_START_INDEX, N_e) for _ in range(90)]
 
 
     particle_counts = IEAD.flatten()
@@ -201,13 +207,13 @@ def get_particle_parameters(
         'length_unit': 'MICRON',
         'energy_unit': 'EV',
         'mass_unit': 'AMU',
-        'N': list(particle_counts * factor),
+        'N': list((particle_counts * factor).astype(int)),
         'm': [material['mass']] * M ,
         'Z': [material['Z']] * M,
         'E': incident_energies,
         'Ec': [material['Ec']] * M,
         'Es': [material['Es']]*M,
-        'interaction_index': [0],
+        'interaction_index': [0] * M,
         'pos': particle_starting_positions,
         'dir': particle_directions,
         'particle_input_filename': ''
@@ -300,7 +306,7 @@ def main():
 
     directions = [angle_to_dir(x) for x in range(90)]
     N_e = 240
-    for _ in range(N_e):
+    for _ in range(IEAD_START_INDEX, N_e):
         for theta in range(90):
             particle_directions.append(directions[theta])
             particle_starting_positions.append(-1 * directions[theta])
@@ -317,14 +323,14 @@ def main():
             ion_name = ion_names[species_label]
 
             IEAD = np.genfromtxt(IEADfile, delimiter = ' ')
-
+            IEAD = IEAD[IEAD_START_INDEX:]
             particle_parameters = get_particle_parameters(
                 IEAD,
                 Te,
                 Deuterium,
                 particle_starting_positions,
                 particle_directions,
-                example = True,
+                example = example,
             )
 
             RustBCA_SimID = SimID.replace('hpic_results/', '')

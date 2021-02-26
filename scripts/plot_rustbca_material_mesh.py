@@ -3,17 +3,17 @@ import toml
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_mesh(mesh_config, particle_params):
+def plot_mesh(mesh_config, particle_params, show = False, outfile = None):
         _, ax = plt.subplots(figsize=(12,10))
         ax.tick_params(axis = 'both', which = 'major', labelsize = 20)
         ax.tick_params(axis = 'both', which = 'minor', labelsize = 20)
 
         # Coordinate Sets
-        coordinate_sets = mesh_config['coordinate_sets']
-        N = len(coordinate_sets) * 3
+        triangles = mesh_config['triangles']
+        N = len(triangles) * 3
         mesh = np.zeros((N,2))
         for n in range(N):
-            coords = coordinate_sets[n // 3]
+            coords = triangles[n // 3]
             x, y = coords[n % 3], coords[(n % 3) + 3]
             mesh[n][0] = x
             mesh[n][1] = y
@@ -27,7 +27,7 @@ def plot_mesh(mesh_config, particle_params):
             plt.plot(triangle[:,0], triangle[:,1], 'b-')
 
         # Mesh Boundary
-        mesh_boundary = np.array(mesh_config['boundary_points'])
+        mesh_boundary = np.array(mesh_config['material_boundary_points'])
         plt.plot(
             mesh_boundary[:,0],
             mesh_boundary[:,1],
@@ -47,7 +47,7 @@ def plot_mesh(mesh_config, particle_params):
 
         # Plot All Particle Directions
         plotted_particle_starts = set()
-        for x, v in list(zip(particle_params['pos'], particle_params['dir']))[::5]:
+        for x, v in list(zip(particle_params['pos'], particle_params['dir']))[::100]:
             if (x[0], x[1]) not in plotted_particle_starts:
                 plt.plot(x[0], x[1], 'o')
                 plotted_particle_starts.add((x[0], x[1]))
@@ -66,7 +66,14 @@ def plot_mesh(mesh_config, particle_params):
         plt.ylabel('y (%s)' % length_unit, fontsize = 20)
         plt.xlabel('x (%s)' % length_unit, fontsize = 20)
         plt.legend(prop = dict(size=16))
-        plt.show()
+
+        if outfile is not None:
+            plt.savefig(outfile, dpi = 300, bbox_inches = 'tight')
+            print(f'saved to {outfile}')
+
+        if show:
+            print('showing..')
+            plt.show()
 
 
 
@@ -77,4 +84,5 @@ if __name__ == '__main__':
     plot_mesh(
         data['mesh_2d_input'],
         data['particle_parameters'],
+        outfile = 'example-mesh.png'
     )
