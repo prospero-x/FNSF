@@ -1,0 +1,16 @@
+outer_sop_plus_0.304m_from_sp
+
+debye Lengths: 906
+1 grid point per debye length
+20 time steps per gyroperiod
+1 ion acoustic transit time
+500 particles per cell
+
+Deuterium real density: 5.62227e20
+Deuterium particles in simulation: 234367
+
+debye length for this simulation: 5e-7m
+
+therefore: domain is 906 * 5e-7 = 4.53e-4m
+In a region this big, there should be: 
+

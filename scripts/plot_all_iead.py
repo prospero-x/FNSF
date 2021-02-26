@@ -71,10 +71,7 @@ def main():
         else:
             Te_eV = solps_data[dataset_for_sim].iloc[idx-1]['Te (eV)']
 
-        try:
-            iead_datafile = glob.glob(f'{SimID}/*IEAD_sp0.dat')[0]
-        except IndexError:
-            breakpoint()
+        iead_datafile = glob.glob(f'{SimID}/*IEAD_sp0.dat')[0]
         plot_iead(iead_datafile, Te_eV, data_set_label, SimLsep, SimID)
 
 

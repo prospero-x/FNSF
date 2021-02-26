@@ -4,13 +4,11 @@ import stat
 from gyroradius import gyroradius_for_row
 from debye_length import compute_debye_length_for_row
 import util
-from common import DATAFILES, _MACHINE_ASSIGNMENTS_FILE, _ions_of_interest
+from common import DATAFILES, _MACHINE_ASSIGNMENTS_FILE, _ions_of_interest, _CONFIG_FILENAME
 import scientific_constants as sc
 import yaml
 
 
-"""Store parameters in this file used as arguments to hpic simulations"""
-_CONFIG_FILENAME = 'config.yaml'
 
 
 _HPIC_EXEC = '~/hPIC/hpic_1d3v/hpic'

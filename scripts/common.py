@@ -1,4 +1,8 @@
 
+"""Store parameters in this file used as arguments to hpic simulations"""
+_CONFIG_FILENAME = 'config.yaml'
+
+
 DATAFILES = {
     'inner': 'solps_data/solpsTargInner.csv',
     'outer': 'solps_data/solpsTargOuter.csv',

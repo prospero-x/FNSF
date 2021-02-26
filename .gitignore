@@ -5,6 +5,8 @@ generated/
 
 # Output directory holding simulation results
 hpic_results/
+rustbca_simulations
+rustbca_simulation_examples
 
 *.mp4
 
