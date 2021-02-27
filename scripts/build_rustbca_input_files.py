@@ -17,11 +17,6 @@ each directory a subdirectory for each y-offset is created. Inside each
 subdirectory, an input.toml file is created for RustBCA to use.
 """
 
-# In my understanding, the first row of the IEAD corresponds to 0 energy, which
-# means it must be skipped (Rustbca doesn't like 0 energy incident particles)
-IEAD_START_INDEX = 1
-
-
 def get_target_height_and_length():
     """
     :return: target height and length, in microns.
@@ -195,10 +190,12 @@ def get_particle_parameters(
     N_e = 240
 
     # get energies.
-    # first 90 elements:0 * max_E / 24
-    # next 90 elements: 1 * max_E / 24
+    # first 90 elements: 0.05 * Te
+    # next 90 elements:  0.15 * Te
     # ...
-    incident_energies = [Ei  * max_E / N_e for Ei in range(IEAD_START_INDEX, N_e) for _ in range(90)]
+    # final 90 elements: 23.95 * Te
+    incident_energies = [(Ei + 0.5)  * max_E / N_e for Ei in range(N_e) for _ in range(90)]
+    breakpoint()
 
 
     particle_counts = IEAD.flatten()
@@ -306,7 +303,7 @@ def main():
 
     directions = [angle_to_dir(x) for x in range(90)]
     N_e = 240
-    for _ in range(IEAD_START_INDEX, N_e):
+    for _ in range(N_e):
         for theta in range(90):
             particle_directions.append(directions[theta])
             particle_starting_positions.append(-1 * directions[theta])
@@ -323,7 +320,6 @@ def main():
             ion_name = ion_names[species_label]
 
             IEAD = np.genfromtxt(IEADfile, delimiter = ' ')
-            IEAD = IEAD[IEAD_START_INDEX:]
             particle_parameters = get_particle_parameters(
                 IEAD,
                 Te,

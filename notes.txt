@@ -14,5 +14,7 @@ debye length for this simulation: 5e-7m
 therefore: domain is 906 * 5e-7 = 4.53e-4m
 In a region this big, there should be:
 
+hpic provides p2c at beginning for every thing. 
+
 How to interprate line 0 of the IEAD?
 
