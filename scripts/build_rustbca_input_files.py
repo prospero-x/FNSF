@@ -70,7 +70,7 @@ def generate_rustbca_input(
     options = {
         'name': name,
         'track_trajectories': False,
-        'track_recoils': False,
+        'track_recoils': True,
         'track_displacements': False,
         'track_energy_losses': False,
         'track_recoil_trajectories': False,
@@ -81,8 +81,8 @@ def generate_rustbca_input(
         'num_threads': 12,
         'num_chunks': num_chunks,
         'use_hdf5': False,
-        'electronic_stopping_mode': 'LOW_ENERGY_LOCAL', # Jon - Low energy local better for gas
-        'mean_free_path_model': 'GASEOUS',
+        'electronic_stopping_mode': 'LOW_ENERGY_NONLOCAL',
+        'mean_free_path_model': 'LIQUID',
         'interaction_potential': [['KR_C']],
     }
 
@@ -90,15 +90,14 @@ def generate_rustbca_input(
     Target Material (Lithium) properties (values from ./materials_info.txt)
     """
     # Density (atoms per cubic micron)
-    n_target = 4.633e+10
+    # LIQUID lithium density
+    n_target = 4.442103e+10
 
     # Surface Binding Energy (eV)
     Es_target = 1.64
-    Es_target_gas = 0
 
     # Bulk Binding Energy (eV)
     Eb_target = 1.64
-    Eb_target_gas = 0
 
     # Cutoff energy for incident ions (eV)
     Ec_target = 1.5
@@ -112,8 +111,8 @@ def generate_rustbca_input(
     material_parameters = {
         'energy_unit': 'EV',
         'mass_unit': 'AMU',
-        'Eb': [Eb_target_gas],
-        'Es': [Es_target_gas],
+        'Eb': [Eb_target],
+        'Es': [Es_target],
         'Ec': [Ec_target],
         'Z': [Z_target],
         'm': [m_target] ,
@@ -122,7 +121,7 @@ def generate_rustbca_input(
     }
 
     height, length = get_target_height_and_length()
-    energy_barrier_thickness = (n_target)**(-1./3.)/np.sqrt(2.*np.pi)
+    energy_barrier_thickness = n_target**(-1./3.)
 
     target_boundary_points = get_target_boundary_points(height, length)
     triangles = get_target_mesh_triangles(height, length)
@@ -133,7 +132,7 @@ def generate_rustbca_input(
         'densities': [[n_target]] * len(triangles),
         'material_boundary_points': target_boundary_points,
         'simulation_boundary_points': get_simulation_boundary_points(broadening_factor=1),
-        'electronic_stopping_correction_factors': [ 1.1 ] * len(triangles) ,
+        'electronic_stopping_correction_factors': [ 1.0 ] * len(triangles) ,
     }
 
 
@@ -150,7 +149,7 @@ def generate_rustbca_input(
         # Since the 'options' section will be at the end (alphabetical order),
         # we can write these extra bits after the rest of the toml and they
         # will become part of the 'options' section.
-        f.write(r'scattering_integral = [[{"GAUSS_MEHLER"={n_points = 10}}]]')
+        f.write(r'scattering_integral = [["MENDENHALL_WELLER"]]')
         f.write('\n')
         f.write(r'root_finder = [[{"NEWTON"={max_iterations = 100, tolerance=1E-3}}]]')
 
@@ -195,7 +194,6 @@ def get_particle_parameters(
     # ...
     # final 90 elements: 23.95 * Te
     incident_energies = [(Ei + 0.5)  * max_E / N_e for Ei in range(N_e) for _ in range(90)]
-    breakpoint()
 
 
     particle_counts = IEAD.flatten()
