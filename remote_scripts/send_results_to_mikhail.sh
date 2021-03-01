@@ -38,6 +38,7 @@
 
 FILE_PATTERNS_OF_INTEREST=(
 *IEAD_sp0.dat
+hpic.log
 )
 
 # destination on mikhail's box

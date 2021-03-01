@@ -2,4 +2,3 @@
 4. find liquid lithium surface binding energy
 5. calculate sputtering threshold with plasmaEdu/sputtering
 7. Find p2c formula.
-8. get p2c from hpic logs.
