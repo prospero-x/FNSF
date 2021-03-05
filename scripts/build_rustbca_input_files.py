@@ -17,12 +17,24 @@ each directory a subdirectory for each y-offset is created. Inside each
 subdirectory, an input.toml file is created for RustBCA to use.
 """
 
-def get_target_height_and_length():
-    """
-    :return: target height and length, in microns.
-    """
-    return 1.0, 1.0
+# The minimum number of total particles (across ALL energy/angle pairs) to
+# fulfill the definition of a "high resolution" simulation
+HIGH_RESOLUTION_N = 1e6
 
+# Microns
+TARGET_HEIGHT = 1.0
+TARGET_LENGTH = 1.0
+
+
+def get_midpoint(p1,p2):
+    x1, y1 = p1
+    x2, y2 = p2
+    midpoint = np.array([
+        abs(x1 - x2)/2 + min(x1, x2),
+        abs(y1 - y2)/2 + min(y1, y2),
+        0.0,
+    ])
+    return midpoint
 
 def rotate(X, theta):
     """
@@ -34,28 +46,27 @@ def rotate(X, theta):
     return Xprime
 
 
-def get_target_boundary_points(height, length, theta = 0.0):
-    b1 = rotate((-length/2., 0), theta)
-    b2 = rotate((-length/2., -height), theta)
-    b3 = rotate((length/2., 0), theta)
-    b4 = rotate((length/2., -height), theta)
+def get_target_boundary_points(theta = 0.0):
+    b1 = rotate((-TARGET_LENGTH/2., 0), theta)
+    b2 = rotate((-TARGET_LENGTH/2., -TARGET_HEIGHT), theta)
+    b3 = rotate((TARGET_LENGTH/2., -TARGET_HEIGHT), theta)
+    b4 = rotate((TARGET_LENGTH/2., 0), theta)
     return b1, b2, b3, b4
 
 
 def get_simulation_boundary_points(broadening_factor = 0.05):
-    height, length = get_target_height_and_length()
-    b1, b2, b3, b4 = get_target_boundary_points(height, length)
-    sb1 = (b1[0] - length * broadening_factor, b1[1] + height * broadening_factor)
-    sb2 = (b2[0] - length * broadening_factor, b2[1] - height * broadening_factor)
-    sb3 = (b3[0] + length * broadening_factor, b3[1] + height * broadening_factor)
-    sb4 = (b4[0] + length * broadening_factor, b4[1] - height * broadening_factor)
+    b1, b2, b3, b4 = get_target_boundary_points()
+    sb1 = (b1[0] - TARGET_LENGTH * broadening_factor, b1[1] + TARGET_HEIGHT * broadening_factor)
+    sb2 = (b2[0] - TARGET_LENGTH * broadening_factor, b2[1] - TARGET_HEIGHT * broadening_factor)
+    sb3 = (b3[0] + TARGET_LENGTH * broadening_factor, b3[1] - TARGET_HEIGHT * broadening_factor)
+    sb4 = (b4[0] + TARGET_LENGTH* broadening_factor, b4[1] + TARGET_HEIGHT * broadening_factor)
     return sb1, sb2, sb3, sb4
 
 
-def get_target_mesh_triangles(height, length):
-    b1, b2, b3, b4 = get_target_boundary_points(height, length)
-    triangle1 = [b2[0], b1[0], b3[0], b2[1], b1[1], b3[1]]
-    triangle2 = [b2[0], b4[0], b3[0], b2[1], b4[1], b3[1]]
+def get_target_mesh_triangles():
+    b1, b2, b3, b4 = get_target_boundary_points()
+    triangle1 = [b2[0], b1[0], b4[0], b2[1], b1[1], b4[1]]
+    triangle2 = [b2[0], b4[0], b3[0], b2[1], b3[1], b4[1]]
     return triangle1, triangle2
 
 
@@ -64,7 +75,8 @@ def generate_rustbca_input(
     name,
     particle_parameters,
     num_chunks,
-    input_filename):
+    input_filename,
+    lithium_surface_binding_energy = 1.4):
 
     print(f'building {input_filename}...')
     options = {
@@ -93,11 +105,8 @@ def generate_rustbca_input(
     # LIQUID lithium density
     n_target = 4.442103e+10
 
-    # Surface Binding Energy (eV)
-    Es_target = 1.64
-
-    # Bulk Binding Energy (eV)
-    Eb_target = 1.64
+    # Bulk Binding Energy (eV). Using Heat of Formation from JP's paper
+    Eb_target = 1.1
 
     # Cutoff energy for incident ions (eV)
     Ec_target = 1.5
@@ -112,20 +121,22 @@ def generate_rustbca_input(
         'energy_unit': 'EV',
         'mass_unit': 'AMU',
         'Eb': [Eb_target],
-        'Es': [Es_target],
+        'Es': [lithium_surface_binding_energy],
         'Ec': [Ec_target],
         'Z': [Z_target],
         'm': [m_target] ,
         'interaction_index': [0],
-        'surface_binding_model': "AVERAGE"
+        'surface_binding_model': 'AVERAGE',
+        'bulk_binding_model': 'AVERAGE'
     }
 
-    height, length = get_target_height_and_length()
     energy_barrier_thickness = n_target**(-1./3.)
 
-    target_boundary_points = get_target_boundary_points(height, length)
-    triangles = get_target_mesh_triangles(height, length)
-    mesh_2d_input = {
+    target_boundary_points = get_target_boundary_points()
+    triangles = get_target_mesh_triangles()
+
+    # 2D Mesh
+    geometry_input = {
         'length_unit': 'MICRON',
         'energy_barrier_thickness': energy_barrier_thickness,
         'triangles': triangles,
@@ -139,7 +150,7 @@ def generate_rustbca_input(
     input_file = {
         'material_parameters': material_parameters,
         'particle_parameters': particle_parameters,
-        'mesh_2d_input': mesh_2d_input,
+        'geometry_input': geometry_input,
         'options': options,
     }
 
@@ -161,6 +172,13 @@ Deuterium = {
     'Es': 1.5,  # Surface Binding Energy, eV
 }
 
+Helium = {
+    'mass': 4.002602,  # Average Mass (a.m.u.)
+    'Z':  2,  # Proton Count
+    'Ec': 1.0,  # Cutoff energy, eV
+    'Es': 0.0,  # Surface Binding Energy, eV
+}
+
 
 def angle_to_dir(angle):
     """
@@ -168,18 +186,18 @@ def angle_to_dir(angle):
     return: a three-tuple, representing the x, y, and z direction
     """
     radians = angle * np.pi / 180
-    particle_dir = np.array([np.sin(radians), -np.cos(radians), 0.0])
+    particle_dir = np.array([np.cos(radians), -np.sin(radians), 0.0])
     return np.round(particle_dir, decimals = 5)
 
 
-def get_particle_parameters(
+def get_particle_parameters_from_IEAD(
         IEAD,
         Te,
         material,
         particle_starting_positions,
         particle_directions,
         example = False,
-        factor = 1.0):
+        factor = 1):
     """
     Incident ion properties
     """
@@ -194,7 +212,6 @@ def get_particle_parameters(
     # ...
     # final 90 elements: 23.95 * Te
     incident_energies = [(Ei + 0.5)  * max_E / N_e for Ei in range(N_e) for _ in range(90)]
-
 
     particle_counts = IEAD.flatten()
     M = IEAD.size
@@ -218,23 +235,37 @@ def get_particle_parameters(
         # so we can easily view the rustbca input file and examine
         # more interesting values like the interaction potential and
         # the integration method, etc.
-        keys_with_large_values = ['E', 'N', 'm', 'Z', 'Ec', 'Es', 'pos', 'dir']
+        keys_with_large_values = ['E', 'N', 'm', 'Z', 'Ec', 'Es', 'pos', 'dir','interaction_index']
         for k in keys_with_large_values:
             del particle_parameters[k]
     return particle_parameters
 
+def get_particle_parameters(
+    material,
+    particle_starting_positions,
+    particle_directions,
+    incident_energies,
+    N):
 
-def invert_ion_map(ion_map):
-    """
-    @param: ion_map: list of dictionaries where keys are ion names and values
-         are hpic labels
-    @return: dictionary where keys are hpic lables and keys are ion names
-    """
-    rv = {}
-    for i, ion_info in enumerate(ion_map):
-        ion_name = list(ion_info.keys())[0]
-        rv[f'sp{i}'] = ion_name
-    return rv
+    particle_parameters = {
+        'length_unit': 'MICRON',
+        'energy_unit': 'EV',
+        'mass_unit': 'AMU',
+        'N': [N],
+        'm': [material['mass']],
+        'Z': [material['Z']],
+        'E': incident_energies,
+        'Ec': [material['Ec']],
+        'Es': [material['Es']],
+        'interaction_index': [0],
+        'pos': particle_starting_positions,
+        'dir': particle_directions,
+        'particle_input_filename': ''
+    }
+    return particle_parameters
+
+
+
 
 
 def get_Te_for_Lsep(Lsep, df):
@@ -268,24 +299,33 @@ def get_Te_for_Lsep(Lsep, df):
 
 
 def main():
+    # SBE (eV). We don't know a good value for SBE, so we're estimating a range.
+    lithium_surface_binding_energy = 1.0
+    if len(sys.argv) >= 2:
+        if sys.argv[1].lower() != 'low' and sys.argv[1].lower() != 'high':
+            print('usage: python build_rustbca_input_files.py (high|low) [example]')
+            sys.exit(1)
+        elif sys.argv[1].lower() == 'high':
+            lithium_surface_binding_energy = 4.0
+
     example = False
-    if len(sys.argv) == 2:
-        if sys.argv[1].lower() != 'example':
-            print('usage: python build_rustbca_input_files.py [example]')
+    if len(sys.argv) == 3:
+        if sys.argv[2].lower() != 'example':
+            print('usage: python build_rustbca_input_files.py (high|low) [example]')
             sys.exit(1)
         else:
             example = True
 
+    output_dir = f'rustbca_simulations/SBE_{int(lithium_surface_binding_energy)}eV'
+    if example:
+        output_dir = f'rustbca_simulation_examples/SBE_{int(lithium_surface_binding_energy)}eV'
+    util.mkdir(output_dir)
 
     # Pin down species names in a config file so we're never wondering what
     # ion "sp4" is.
     config = util.load_yaml(common._CONFIG_FILENAME)
-    ion_names = invert_ion_map(config['ions'])
+    ion_names = common.invert_ion_map(config['ions'])
 
-    output_dir = 'rustbca_simulations'
-    if example:
-        output_dir = 'rustbca_simulation_examples'
-    util.mkdir(output_dir)
 
     datafiles = common.DATAFILES
     solps_data = {}
@@ -299,14 +339,24 @@ def main():
     particle_directions = []
     particle_starting_positions = []
 
-    directions = [angle_to_dir(x) for x in range(90)]
+    # we want the particles to strike the target halfway up the left side,
+    # coming from the left.
+    top_left_corner, bottom_left_corner, _, _ = get_target_boundary_points()
+    mesh_strike_point = get_midpoint(top_left_corner, bottom_left_corner)
+
+    # Rotate just a tad to avoid gimball lock (x-direction cannot equal 1 )
+    directions = [rotate(angle_to_dir(x), 0.0001) for x in range(90)]
     N_e = 240
     for _ in range(N_e):
         for theta in range(90):
             particle_directions.append(directions[theta])
-            particle_starting_positions.append(-1 * directions[theta])
+            particle_starting_positions.append(mesh_strike_point - directions[theta])
 
+
+    conversion_factor_file = open(common._PARTICLE_CONVERSION_FACTORS_FILE, 'w+')
     for SimID in glob.glob('hpic_results/*'):
+        if SimID == 'hpic_results/p2c.csv':
+            continue
         dataset_for_sim = common.get_dataset_from_SimID(SimID)
         SimLsep = common.get_Lsep_from_SimID(SimID)
         Te = get_Te_for_Lsep(SimLsep, solps_data[dataset_for_sim])
@@ -318,25 +368,94 @@ def main():
             ion_name = ion_names[species_label]
 
             IEAD = np.genfromtxt(IEADfile, delimiter = ' ')
-            particle_parameters = get_particle_parameters(
+
+            # Multiply each count in the IEAD by a factor to each a total
+            # number of simulation particles to count as a "high resolution"
+            # simulation
+            factor = 1
+            if np.sum(IEAD) < 1e6:
+               factor = np.ceil(1e6/np.sum(IEAD))
+
+            particle_parameters = get_particle_parameters_from_IEAD(
                 IEAD,
                 Te,
                 Deuterium,
                 particle_starting_positions,
                 particle_directions,
                 example = example,
+                factor = factor,
             )
 
-            RustBCA_SimID = SimID.replace('hpic_results/', '')
-            rustbca_input_file = output_dir + '/' + RustBCA_SimID + '.toml'
+            # include the output dir in the Sim name so the results get saved
+            # to the subdirectory
+            RustBCA_SimID = output_dir + '/' + SimID.replace('hpic_results/', '') + ion_name + '/'
+            util.mkdir(RustBCA_SimID)
+            rustbca_input_file =  RustBCA_SimID + 'input.toml'
             num_chunks = 100
+
+            conversion_factor_file.write(f'{RustBCA_SimID},{factor}\n')
 
             generate_rustbca_input(
                 RustBCA_SimID,
                 particle_parameters,
                 num_chunks,
                 rustbca_input_file,
+                lithium_surface_binding_energy = lithium_surface_binding_energy,
             )
 
+    conversion_factor_file.close()
+
+def format_single_calibration_file():
+    """
+    I'm having a difficult time finding an accurate value for energy
+    barrier thickness for liquid lithium. So instead I'm going to take JP's
+    2003 paper on Liquid lithium sputtering rates, and fine tune a simulation
+    until I can get similar results to his.
+    """
+
+    output_dir = 'rustbca_simulations'
+    util.mkdir(output_dir)
+
+ # include the outut directory in the simulation name so RustBCA
+    # saves the data in the subdirectory.
+    SimID = output_dir + '/he_on_liquid_lithium_calibration/'
+    util.mkdir(SimID)
+    rustbca_input_filename = SimID + 'input.toml'
+
+    # Number of incident He ions in simulation
+    N = 10000
+
+    # Figures specific to JP's paper
+    # [eV]
+    He_incident_E = 700
+    He_incident_dir = angle_to_dir(89)
+
+    # we want the particles to strike the target halfway up the left side,
+    # coming from the left.
+    top_left_corner, bottom_left_corner, _, _ = get_target_boundary_points()
+    mesh_strike_point = get_midpoint(top_left_corner, bottom_left_corner)
+    particle_directions = [rotate(He_incident_dir, 0.01)]
+    particle_starting_positions = [mesh_strike_point - He_incident_dir]
+    particle_incident_energies = [He_incident_E]
+
+    particle_parameters = get_particle_parameters(
+        Helium,
+        particle_starting_positions,
+        particle_directions,
+        particle_incident_energies,
+        N,
+    )
+    num_chunks = min(N, 10)
+
+    generate_rustbca_input(
+        SimID,
+        particle_parameters,
+        num_chunks,
+        rustbca_input_filename,
+    )
+
+
+
 if __name__ == '__main__':
+    #format_single_calibration_file()
     main()

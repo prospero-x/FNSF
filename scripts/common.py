@@ -10,6 +10,7 @@ DATAFILES = {
 
 _MACHINE_ASSIGNMENTS_FILE =  'machine_assignments.yaml'
 
+_PARTICLE_CONVERSION_FACTORS_FILE = 'conversion_factors.csv'
 
 _columns_of_interest = [
     'L-Lsep (m)',
@@ -117,4 +118,17 @@ def get_Lsep_from_SimID(SimID):
     sign, val = Lsep_str.split('_')
     sign = 1 if sign == 'plus' else -1
     return sign * float(val)
+
+def invert_ion_map(ion_map):
+    """
+    @param: ion_map: list of dictionaries where keys are ion names and values
+         are hpic labels
+    @return: dictionary where keys are hpic lables and keys are ion names
+    """
+    rv = {}
+    for i, ion_info in enumerate(ion_map):
+        ion_name = list(ion_info.keys())[0]
+        rv[f'sp{i}'] = ion_name
+    return rv
+
 

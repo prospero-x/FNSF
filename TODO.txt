@@ -1,4 +1,3 @@
-3. find liquid lithium energy barrier thickness
-4. find liquid lithium surface binding energy
-5. calculate sputtering threshold with plasmaEdu/sputtering
 7. Find p2c formula.
+8. Redo Gyroradius formula with expected value for thermal speed. Should be small correction.
+9. Verify whether I need a correction factor or not.

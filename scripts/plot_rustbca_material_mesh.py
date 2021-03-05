@@ -3,13 +3,13 @@ import toml
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_mesh(mesh_config, particle_params, show = False, outfile = None):
+def plot_mesh(geometry_config, particle_params, show = False, outfile = None):
         _, ax = plt.subplots(figsize=(12,10))
         ax.tick_params(axis = 'both', which = 'major', labelsize = 20)
         ax.tick_params(axis = 'both', which = 'minor', labelsize = 20)
 
         # Coordinate Sets
-        triangles = mesh_config['triangles']
+        triangles = geometry_config['triangles']
         N = len(triangles) * 3
         mesh = np.zeros((N,2))
         for n in range(N):
@@ -27,7 +27,7 @@ def plot_mesh(mesh_config, particle_params, show = False, outfile = None):
             plt.plot(triangle[:,0], triangle[:,1], 'b-')
 
         # Mesh Boundary
-        mesh_boundary = np.array(mesh_config['material_boundary_points'])
+        mesh_boundary = np.array(geometry_config['material_boundary_points'])
         plt.plot(
             mesh_boundary[:,0],
             mesh_boundary[:,1],
@@ -37,7 +37,7 @@ def plot_mesh(mesh_config, particle_params, show = False, outfile = None):
 
 
         # Simulation Boundary
-        simulation_boundary = np.array(mesh_config['simulation_boundary_points'])
+        simulation_boundary = np.array(geometry_config['simulation_boundary_points'])
         plt.plot(
             simulation_boundary[:,0],
             simulation_boundary[:,1],
@@ -61,7 +61,7 @@ def plot_mesh(mesh_config, particle_params, show = False, outfile = None):
             )
 
 
-        length_unit = mesh_config['length_unit'].lower()
+        length_unit = geometry_config['length_unit'].lower()
         plt.title('2-D Simulation Mesh', fontsize = 20)
         plt.ylabel('y (%s)' % length_unit, fontsize = 20)
         plt.xlabel('x (%s)' % length_unit, fontsize = 20)
@@ -78,11 +78,13 @@ def plot_mesh(mesh_config, particle_params, show = False, outfile = None):
 
 
 if __name__ == '__main__':
-    with open(sys.argv[1], 'r') as f:
+    rustbca_input_file = sys.argv[1]
+    with open(rustbca_input_file, 'r') as f:
         data = toml.load(f)
 
     plot_mesh(
-        data['mesh_2d_input'],
+        data['geometry_input'],
         data['particle_parameters'],
-        outfile = 'example-mesh.png'
+        outfile = data['options']['name'] + '.png',
+        show = True,
     )
