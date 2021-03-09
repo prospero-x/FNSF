@@ -38,6 +38,9 @@
 
 FILE_PATTERNS_OF_INTEREST=(
 *IEAD_sp0.dat
+*IEAD_sp1.dat
+*IEAD_sp2.dat
+*IEAD_sp3.dat
 hpic.log
 )
 

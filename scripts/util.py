@@ -33,7 +33,7 @@ def load_solps_data(filename, columns_subset = None):
 
 def mkdir(dirname):
     if not os.path.exists(dirname):
-        os.mkdir(dirname)
+        os.makedirs(dirname)
 
 
 def make_executable(filename):

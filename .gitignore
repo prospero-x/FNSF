@@ -12,3 +12,6 @@ rustbca_simulation_examples
 
 # Script specific to hpic simulations
 get_total_pushes.sh
+
+# Rustbca builds
+target/

@@ -62,7 +62,7 @@ def gyroradius(T, m, q, B):
 
     :returns: gyroradius, in meters
     """
-    v = np.sqrt(8./np.pi * Qe * T / m)
+    v = np.sqrt(2 * Qe * T / m)
     rg = m * v / q / B
     return rg
 

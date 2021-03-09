@@ -25,6 +25,30 @@ HIGH_RESOLUTION_N = 1e6
 TARGET_HEIGHT = 1.0
 TARGET_LENGTH = 1.0
 
+SKIP_IONS = set([
+    #'nD+1',
+])
+
+# This is how many processes each LCPP box can run
+# before the effective run time doubles.
+machine_core_counts = {
+    'pc85': 12,
+    'pc101': 12,
+    'pc102': 12,
+    'pc103': 12,
+    'pc201': 24,
+    'pc202': 24,
+}
+
+TOTAL_SIMULATIONS = 182
+
+
+def get_simulations_per_machine():
+    proportions = {}
+    total_capacity = sum((v for v in machine_core_counts.values()))
+    for machine_name, ncores in machine_core_counts.items():
+        proportions[machine_name] = int(ncores * TOTAL_SIMULATIONS /total_capacity) + 1
+    return proportions
 
 def get_midpoint(p1,p2):
     x1, y1 = p1
@@ -75,6 +99,7 @@ def generate_rustbca_input(
     name,
     particle_parameters,
     num_chunks,
+    nthreads,
     input_filename,
     lithium_surface_binding_energy = 1.4):
 
@@ -90,7 +115,7 @@ def generate_rustbca_input(
         'weak_collision_order': 0,
         'suppress_deep_recoils': False,
         'high_energy_free_flight_paths': False,
-        'num_threads': 12,
+        'num_threads': nthreads,
         'num_chunks': num_chunks,
         'use_hdf5': False,
         'electronic_stopping_mode': 'LOW_ENERGY_NONLOCAL',
@@ -166,19 +191,36 @@ def generate_rustbca_input(
 
 
 Deuterium = {
-    'mass': 2.014,  # Average Mass (a.m.u.)
-    'Z':  1,  # Proton Count
-    'Ec': 0.95,  # Cutoff energy, eV
-    'Es': 1.5,  # Surface Binding Energy, eV
+    'mass': 2.014,     # Average Mass (a.m.u.)
+    'Z':  1,           # Proton Count
+    'Ec': 0.95,        # Cutoff energy, eV
+    'Es': 1.5,         # Surface Binding Energy, eV
 }
 
 Helium = {
     'mass': 4.002602,  # Average Mass (a.m.u.)
-    'Z':  2,  # Proton Count
-    'Ec': 1.0,  # Cutoff energy, eV
-    'Es': 0.0,  # Surface Binding Energy, eV
+    'Z':  2,           # Proton Count
+    'Ec': 1.0,         # Cutoff energy, eV
+    'Es': 0.0,         # Surface Binding Energy, eV
 }
 
+Neon = {
+    'mass': 20.1797, # Average Mass (a.m.u.)
+    'Z': 10,         # Proton Count
+    'Ec': 0.1,       # Cutoff Energy, eV
+    'Es': 0.0,       # Surface Binding Energy, eV
+}
+
+"""
+The names come from hPIC labels. These are pinned down in config.yaml, which
+configures the hPIC simulations and avoids ambiguity in post-processing.
+"""
+incident_ions = {
+    'nD+1': Deuterium,
+    'nNe+1': Neon,
+    'nNe+2': Neon,
+    'nNe+3': Neon,
+}
 
 def angle_to_dir(angle):
     """
@@ -193,7 +235,7 @@ def angle_to_dir(angle):
 def get_particle_parameters_from_IEAD(
         IEAD,
         Te,
-        material,
+        particle,
         particle_starting_positions,
         particle_directions,
         example = False,
@@ -213,6 +255,7 @@ def get_particle_parameters_from_IEAD(
     # final 90 elements: 23.95 * Te
     incident_energies = [(Ei + 0.5)  * max_E / N_e for Ei in range(N_e) for _ in range(90)]
 
+
     particle_counts = IEAD.flatten()
     M = IEAD.size
     particle_parameters = {
@@ -220,11 +263,11 @@ def get_particle_parameters_from_IEAD(
         'energy_unit': 'EV',
         'mass_unit': 'AMU',
         'N': list((particle_counts * factor).astype(int)),
-        'm': [material['mass']] * M ,
-        'Z': [material['Z']] * M,
+        'm': [particle['mass']] * M ,
+        'Z': [particle['Z']] * M,
         'E': incident_energies,
-        'Ec': [material['Ec']] * M,
-        'Es': [material['Es']]*M,
+        'Ec': [particle['Ec']] * M,
+        'Es': [particle['Es']]*M,
         'interaction_index': [0] * M,
         'pos': particle_starting_positions,
         'dir': particle_directions,
@@ -241,7 +284,7 @@ def get_particle_parameters_from_IEAD(
     return particle_parameters
 
 def get_particle_parameters(
-    material,
+    particle,
     particle_starting_positions,
     particle_directions,
     incident_energies,
@@ -252,20 +295,17 @@ def get_particle_parameters(
         'energy_unit': 'EV',
         'mass_unit': 'AMU',
         'N': [N],
-        'm': [material['mass']],
-        'Z': [material['Z']],
+        'm': [particle['mass']],
+        'Z': [particle['Z']],
         'E': incident_energies,
-        'Ec': [material['Ec']],
-        'Es': [material['Es']],
+        'Ec': [particle['Ec']],
+        'Es': [particle['Es']],
         'interaction_index': [0],
         'pos': particle_starting_positions,
         'dir': particle_directions,
         'particle_input_filename': ''
     }
     return particle_parameters
-
-
-
 
 
 def get_Te_for_Lsep(Lsep, df):
@@ -316,9 +356,11 @@ def main():
         else:
             example = True
 
-    output_dir = f'rustbca_simulations/SBE_{int(lithium_surface_binding_energy)}eV'
+    SBE_label = f'SBE_{int(lithium_surface_binding_energy)}eV'
+
+    output_dir = f'rustbca_simulations'
     if example:
-        output_dir = f'rustbca_simulation_examples/SBE_{int(lithium_surface_binding_energy)}eV'
+        output_dir = f'rustbca_simulation_examples'
     util.mkdir(output_dir)
 
     # Pin down species names in a config file so we're never wondering what
@@ -327,6 +369,8 @@ def main():
     ion_names = common.invert_ion_map(config['ions'])
 
 
+    if SKIP_IONS:
+        print(f'\nSKIPPING the following ions: {SKIP_IONS}\n')
     datafiles = common.DATAFILES
     solps_data = {}
     for data_set_label, datafile in datafiles.items():
@@ -353,7 +397,11 @@ def main():
             particle_starting_positions.append(mesh_strike_point - directions[theta])
 
 
-    conversion_factor_file = open(common._PARTICLE_CONVERSION_FACTORS_FILE, 'w+')
+    machine_workloads = iter(get_simulations_per_machine().items())
+    machine_name, machine_capacity = next(machine_workloads)
+    simulations_assigned = 0
+
+    conversion_factor_files = {}
     for SimID in glob.glob('hpic_results/*'):
         if SimID == 'hpic_results/p2c.csv':
             continue
@@ -366,46 +414,76 @@ def main():
             iead_label = re.search('IEAD_sp[0-9]{1,2}', IEADfile).group()
             species_label = iead_label.split('_')[1]
             ion_name = ion_names[species_label]
+            if ion_name in SKIP_IONS:
+                continue
 
+
+            # include the output dir in the Sim name so the results get saved
+            # to the subdirectory
+            SimID = SimID.replace("hpic_results/", "")
+            RustBCA_SimID = f'{SBE_label}/{SimID}{ion_name}/'
+            util.mkdir(RustBCA_SimID)
+            rustbca_input_file =  f'{output_dir}/{RustBCA_SimID}{machine_name}-input.toml'
             IEAD = np.genfromtxt(IEADfile, delimiter = ' ')
 
             # Multiply each count in the IEAD by a factor to each a total
             # number of simulation particles to count as a "high resolution"
             # simulation
             factor = 1
-            if np.sum(IEAD) < 1e6:
+            if np.sum(IEAD) == 0:
+                print(
+                    f'Warning Iead file: "{IEADfile}" empty, no Rustbca '
+                    + 'simulation will be run.',
+                )
+                continue
+            elif np.sum(IEAD) < 1e6:
                factor = np.ceil(1e6/np.sum(IEAD))
 
+            # Save the conversion factor
+            if ion_name not in conversion_factor_files:
+                fname = f'rustbca_conversion_factors/{ion_name}.csv'
+                f =  open(fname, 'w+')
+                conversion_factor_files[ion_name] = f
+            conversion_factor_file = conversion_factor_files[ion_name]
+            conversion_factor_file.write(f'{RustBCA_SimID},{factor}\n')
+
+            simulations_assigned += 1
+            if simulations_assigned == machine_capacity:
+                simulations_assigned = 0
+                try:
+                    machine_name, machine_capacity = next(machine_workloads)
+                except StopIteration:
+                    pass
+
+            continue
+            incident_ion = incident_ions[ion_name]
             particle_parameters = get_particle_parameters_from_IEAD(
                 IEAD,
                 Te,
-                Deuterium,
+                incident_ion,
                 particle_starting_positions,
                 particle_directions,
                 example = example,
                 factor = factor,
             )
 
-            # include the output dir in the Sim name so the results get saved
-            # to the subdirectory
-            RustBCA_SimID = output_dir + '/' + SimID.replace('hpic_results/', '') + ion_name + '/'
-            util.mkdir(RustBCA_SimID)
-            rustbca_input_file =  RustBCA_SimID + 'input.toml'
             num_chunks = 100
-
-            conversion_factor_file.write(f'{RustBCA_SimID},{factor}\n')
+            nthreads = machine_core_counts[machine_name]
 
             generate_rustbca_input(
                 RustBCA_SimID,
                 particle_parameters,
                 num_chunks,
+                nthreads,
                 rustbca_input_file,
                 lithium_surface_binding_energy = lithium_surface_binding_energy,
             )
 
-    conversion_factor_file.close()
+    for f in conversion_factor_files.values():
+        f.close()
 
-def format_single_calibration_file():
+
+def format_single_calibration_file(lithium_surface_binding_energy):
     """
     I'm having a difficult time finding an accurate value for energy
     barrier thickness for liquid lithium. So instead I'm going to take JP's
@@ -416,9 +494,9 @@ def format_single_calibration_file():
     output_dir = 'rustbca_simulations'
     util.mkdir(output_dir)
 
- # include the outut directory in the simulation name so RustBCA
+    # include the outut directory in the simulation name so RustBCA
     # saves the data in the subdirectory.
-    SimID = output_dir + '/he_on_liquid_lithium_calibration/'
+    SimID = output_dir + f'/he_on_liquid_lithium_calibration/SBE_{int(lithium_surface_binding_energy)}eV/'
     util.mkdir(SimID)
     rustbca_input_filename = SimID + 'input.toml'
 
@@ -428,7 +506,7 @@ def format_single_calibration_file():
     # Figures specific to JP's paper
     # [eV]
     He_incident_E = 700
-    He_incident_dir = angle_to_dir(89)
+    He_incident_dir = angle_to_dir(80)
 
     # we want the particles to strike the target halfway up the left side,
     # coming from the left.
@@ -446,16 +524,20 @@ def format_single_calibration_file():
         N,
     )
     num_chunks = min(N, 10)
-
+    nthreads = 12
     generate_rustbca_input(
         SimID,
         particle_parameters,
         num_chunks,
+        nthreads,
         rustbca_input_filename,
+        lithium_surface_binding_energy = lithium_surface_binding_energy,
     )
 
 
 
 if __name__ == '__main__':
-    #format_single_calibration_file()
+    if len(sys.argv) > 1 and sys.argv[1].lower() == 'calibrate':
+        format_single_calibration_file(float(sys.argv[2]))
+        sys.exit(0)
     main()
