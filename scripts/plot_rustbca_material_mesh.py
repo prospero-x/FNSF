@@ -47,7 +47,8 @@ def plot_mesh(geometry_config, particle_params, show = False, outfile = None):
 
         # Plot All Particle Directions
         plotted_particle_starts = set()
-        for x, v in list(zip(particle_params['pos'], particle_params['dir']))[::100]:
+        for x, v in list(zip(particle_params['pos'], particle_params['dir']))[::1000]:
+            breakpoint()
             if (x[0], x[1]) not in plotted_particle_starts:
                 plt.plot(x[0], x[1], 'o')
                 plotted_particle_starts.add((x[0], x[1]))

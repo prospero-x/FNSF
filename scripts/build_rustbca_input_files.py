@@ -98,6 +98,7 @@ def get_target_mesh_triangles():
 def generate_rustbca_input(
     name,
     particle_parameters,
+    target_ion,
     num_chunks,
     nthreads,
     input_filename,
@@ -124,23 +125,21 @@ def generate_rustbca_input(
     }
 
     """
-    Target Material (Lithium) properties (values from ./materials_info.txt)
+    Target Material properties (values from ./materials_info.txt)
     """
     # Density (atoms per cubic micron)
-    # LIQUID lithium density
-    n_target = 4.442103e+10
+    n_target = target_ion['density']
 
-    # Bulk Binding Energy (eV). Using Heat of Formation from JP's paper
-    Eb_target = 1.1
+    Eb_target = target_ion['Eb']
 
     # Cutoff energy for incident ions (eV)
-    Ec_target = 1.5
+    Ec_target = target_ion['Ec']
 
     # Proton count
-    Z_target = 3
+    Z_target = target_ion['Z']
 
     # Average Mass (amu)
-    m_target = 6.941
+    m_target = target_ion['mass']
 
     material_parameters = {
         'energy_unit': 'EV',
@@ -204,12 +203,30 @@ Helium = {
     'Es': 0.0,         # Surface Binding Energy, eV
 }
 
+Oxygen = {
+    'mass': 15.9994, # Average Mass (a.m.u.)
+    'Z': 8,         # Proton Count
+    'Ec': 2.0,       # Cutoff Energy, eV
+    'Es': 2.58,       # Surface Binding Energy, eV
+}
+
+
 Neon = {
     'mass': 20.1797, # Average Mass (a.m.u.)
     'Z': 10,         # Proton Count
     'Ec': 0.1,       # Cutoff Energy, eV
     'Es': 0.0,       # Surface Binding Energy, eV
 }
+
+Tungsten = {
+    'density': 6.306e10,  # Atoms per cubic micron
+    'mass': 183.84,  # Average Mass (a.m.u.)
+    'Z': 74,         # Proton Count
+    'Ec': 3.0,       # Cutoff Energy, eV
+    'Es': 8.79,      # Surface Binding Energy, eV
+    'Eb': 0,         # Bulk Binding Energy, eV
+}
+
 
 """
 The names come from hPIC labels. These are pinned down in config.yaml, which
@@ -243,10 +260,10 @@ def get_particle_parameters_from_IEAD(
     """
     Incident ion properties
     """
-    max_E = Te * 24.0
+    max_E = Te * 240.0
 
     # N_e = num different energy values
-    N_e = 240
+    N_e = 2400
 
     # get energies.
     # first 90 elements: 0.05 * Te
@@ -258,6 +275,7 @@ def get_particle_parameters_from_IEAD(
 
     particle_counts = IEAD.flatten()
     M = IEAD.size
+    breakpoint()
     particle_parameters = {
         'length_unit': 'MICRON',
         'energy_unit': 'EV',
@@ -341,44 +359,28 @@ def get_Te_for_Lsep(Lsep, df):
 def main():
     # SBE (eV). We don't know a good value for SBE, so we're estimating a range.
     lithium_surface_binding_energy = 1.0
-    if len(sys.argv) >= 2:
-        if sys.argv[1].lower() != 'low' and sys.argv[1].lower() != 'high':
-            print('usage: python build_rustbca_input_files.py (high|low) [example]')
-            sys.exit(1)
-        elif sys.argv[1].lower() == 'high':
-            lithium_surface_binding_energy = 4.0
+    # if len(sys.argv) >= 2:
+    #     if sys.argv[1].lower() != 'low' and sys.argv[1].lower() != 'high':
+    #         print('usage: python build_rustbca_input_files.py (high|low) [example]')
+    #         sys.exit(1)
+    #     elif sys.argv[1].lower() == 'high':
+    #         lithium_surface_binding_energy = 4.0
 
     example = False
-    if len(sys.argv) == 3:
-        if sys.argv[2].lower() != 'example':
-            print('usage: python build_rustbca_input_files.py (high|low) [example]')
+    if len(sys.argv) == 2:
+        if sys.argv[1].lower() != 'example':
+            print('usage: python build_rustbca_input_files.py [example]')
             sys.exit(1)
         else:
             example = True
-
-    SBE_label = f'SBE_{int(lithium_surface_binding_energy)}eV'
 
     output_dir = f'rustbca_simulations'
     if example:
         output_dir = f'rustbca_simulation_examples'
     util.mkdir(output_dir)
 
-    # Pin down species names in a config file so we're never wondering what
-    # ion "sp4" is.
-    config = util.load_yaml(common._CONFIG_FILENAME)
-    ion_names = common.invert_ion_map(config['ions'])
-
-
-    if SKIP_IONS:
-        print(f'\nSKIPPING the following ions: {SKIP_IONS}\n')
-    datafiles = common.DATAFILES
-    solps_data = {}
-    for data_set_label, datafile in datafiles.items():
-        solps_data[data_set_label] = util.load_solps_data(datafile)
-
-
     # Initialize directions head of time. This is based on the assumptino that
-    # the IEAD has 240 rows (240 energies ranging from 0 to 24*Te) and 90
+    # the IEAD has 2400 rows (2400 energies ranging from 0 to 240*Te) and 90
     # columns (one for each angle between 0 and 90)
     particle_directions = []
     particle_starting_positions = []
@@ -390,97 +392,106 @@ def main():
 
     # Rotate just a tad to avoid gimball lock (x-direction cannot equal 1 )
     directions = [rotate(angle_to_dir(x), 0.0001) for x in range(90)]
-    N_e = 240
+    N_e = 2400
     for _ in range(N_e):
         for theta in range(90):
             particle_directions.append(directions[theta])
-            particle_starting_positions.append(mesh_strike_point - directions[theta])
-
-
-    machine_workloads = iter(get_simulations_per_machine().items())
-    machine_name, machine_capacity = next(machine_workloads)
-    simulations_assigned = 0
-
-    conversion_factor_files = {}
-    for SimID in glob.glob('hpic_results/*'):
-        if SimID == 'hpic_results/p2c.csv':
-            continue
-        dataset_for_sim = common.get_dataset_from_SimID(SimID)
-        SimLsep = common.get_Lsep_from_SimID(SimID)
-        Te = get_Te_for_Lsep(SimLsep, solps_data[dataset_for_sim])
-
-        for IEADfile in glob.glob(SimID + '/*_IEAD_*.dat'):
-            # Get this species name
-            iead_label = re.search('IEAD_sp[0-9]{1,2}', IEADfile).group()
-            species_label = iead_label.split('_')[1]
-            ion_name = ion_names[species_label]
-            if ion_name in SKIP_IONS:
-                continue
-
-
-            # include the output dir in the Sim name so the results get saved
-            # to the subdirectory
-            SimID = SimID.replace("hpic_results/", "")
-            RustBCA_SimID = f'{SBE_label}/{SimID}{ion_name}/'
-            util.mkdir(RustBCA_SimID)
-            rustbca_input_file =  f'{output_dir}/{RustBCA_SimID}{machine_name}-input.toml'
-            IEAD = np.genfromtxt(IEADfile, delimiter = ' ')
-
-            # Multiply each count in the IEAD by a factor to each a total
-            # number of simulation particles to count as a "high resolution"
-            # simulation
-            factor = 1
-            if np.sum(IEAD) == 0:
-                print(
-                    f'Warning Iead file: "{IEADfile}" empty, no Rustbca '
-                    + 'simulation will be run.',
-                )
-                continue
-            elif np.sum(IEAD) < 1e6:
-               factor = np.ceil(1e6/np.sum(IEAD))
-
-            # Save the conversion factor
-            if ion_name not in conversion_factor_files:
-                fname = f'rustbca_conversion_factors/{ion_name}.csv'
-                f =  open(fname, 'w+')
-                conversion_factor_files[ion_name] = f
-            conversion_factor_file = conversion_factor_files[ion_name]
-            conversion_factor_file.write(f'{RustBCA_SimID},{factor}\n')
-
-            simulations_assigned += 1
-            if simulations_assigned == machine_capacity:
-                simulations_assigned = 0
-                try:
-                    machine_name, machine_capacity = next(machine_workloads)
-                except StopIteration:
-                    pass
-
-            continue
-            incident_ion = incident_ions[ion_name]
-            particle_parameters = get_particle_parameters_from_IEAD(
-                IEAD,
-                Te,
-                incident_ion,
-                particle_starting_positions,
-                particle_directions,
-                example = example,
-                factor = factor,
+            particle_starting_positions.append(
+                np.round(mesh_strike_point - directions[theta], decimals = 5)
             )
 
-            num_chunks = 100
-            nthreads = machine_core_counts[machine_name]
 
-            generate_rustbca_input(
-                RustBCA_SimID,
-                particle_parameters,
-                num_chunks,
-                nthreads,
-                rustbca_input_file,
-                lithium_surface_binding_energy = lithium_surface_binding_energy,
-            )
+    # machine_workloads = iter(get_simulations_per_machine().items())
+    # machine_name, machine_capacity = next(machine_workloads)
+    # simulations_assigned = 0
 
-    for f in conversion_factor_files.values():
-        f.close()
+    # conversion_factor_files = {}
+    # # for SimID in glob.glob('hpic_results/*'):
+    # if SimID == 'hpic_results/p2c.csv':
+    #     continue
+    # dataset_for_sim = common.get_dataset_from_SimID(SimID)
+    # SimLsep = common.get_Lsep_from_SimID(SimID)
+    # Te = get_Te_for_Lsep(SimLsep, solps_data[dataset_for_sim])
+
+    #for IEADfile in glob.glob(SimID + '/*_IEAD_*.dat'):
+    IEADfile = 'west55741_16_IEAD_sp1.dat'
+
+    # Get this species name
+    iead_label = IEADfile.replace('_IEAD', '').replace('.dat', '')
+
+    # include the output dir in the Sim name so the results get saved
+    # to the subdirectory
+    RustBCA_SimID = iead_label
+    machine_name = ''
+
+    #util.mkdir(RustBCA_SimID)
+    rustbca_input_file =  f'{output_dir}/{RustBCA_SimID}{machine_name}-input.toml'
+    print(f'Reading {rustbca_input_file}...')
+    IEAD = np.genfromtxt(IEADfile, delimiter = ' ')
+    print('done')
+
+    # Multiply each count in the IEAD by a factor to each a total
+    # number of simulation particles to count as a "high resolution"
+    # simulation
+    factor = 1
+    if np.sum(IEAD) == 0:
+        print(
+            f'Warning Iead file: "{IEADfile}" empty, no Rustbca '
+            + 'simulation will be run.',
+        )
+        #continue
+    elif np.sum(IEAD) < 1e6:
+       factor = np.ceil(1e6/np.sum(IEAD))
+
+    print(f'upscaling IEAD by a factor of {factor}')
+
+    # # Save the conversion factor
+    # if ion_name not in conversion_factor_files:
+    #     fname = f'rustbca_conversion_factors/{ion_name}.csv'
+    #     f =  open(fname, 'w+')
+    #     conversion_factor_files[ion_name] = f
+    # conversion_factor_file = conversion_factor_files[ion_name]
+    # conversion_factor_file.write(f'{RustBCA_SimID},{factor}\n')
+
+    # simulations_assigned += 1
+    # if simulations_assigned == machine_capacity:
+    #     simulations_assigned = 0
+    #     try:
+    #         machine_name, machine_capacity = next(machine_workloads)
+    #     except StopIteration:
+    #         pass
+
+    # continue
+    Te = 10
+    incident_ion = Oxygen
+    target_ion = Tungsten
+    particle_parameters = get_particle_parameters_from_IEAD(
+        IEAD,
+        Te,
+        incident_ion,
+        particle_starting_positions,
+        particle_directions,
+        example = example,
+        factor = factor,
+    )
+
+    # num_chunks = 100
+    # nthreads = machine_core_counts[machine_name]
+    num_chunks = 100
+    nthreads = 8
+
+    generate_rustbca_input(
+        RustBCA_SimID,
+        particle_parameters,
+        target_ion,
+        num_chunks,
+        nthreads,
+        rustbca_input_file,
+        lithium_surface_binding_energy = lithium_surface_binding_energy,
+    )
+
+    # for f in conversion_factor_files.values():
+    #     f.close()
 
 
 def format_single_calibration_file(lithium_surface_binding_energy):
